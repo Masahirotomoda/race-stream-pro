@@ -1,0 +1,44 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function DeleteButton({ reservationId }: { reservationId: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  async function handleDelete() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("削除に失敗しました");
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "エラーが発生しました");
+      setLoading(false);
+      setShowConfirm(false);
+    }
+  }
+
+  if (showConfirm) {
+    return (
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={() => setShowConfirm(false)} style={{ padding: "7px 10px", borderRadius: 5, fontSize: 13, border: "1px solid #333", background: "transparent", color: "#bbb", cursor: "pointer" }}>
+          戻る
+        </button>
+        <button onClick={handleDelete} disabled={loading} style={{ padding: "7px 12px", borderRadius: 5, fontSize: 13, fontWeight: 700, border: "none", background: "#e63946", color: "#fff", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+          {loading ? "…" : "削除確定"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={() => setShowConfirm(true)} style={{ padding: "7px 14px", borderRadius: 5, fontSize: 13, fontWeight: 600, border: "1px solid #e6394644", background: "rgba(230,57,70,0.08)", color: "#e63946", cursor: "pointer" }}>
+      削除
+    </button>
+  );
+}

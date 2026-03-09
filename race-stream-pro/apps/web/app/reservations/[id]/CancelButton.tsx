@@ -1,0 +1,45 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function CancelButton({ reservationId }: { reservationId: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  async function handleCancel() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      if (!res.ok) throw new Error("キャンセルに失敗しました");
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "エラーが発生しました");
+      setLoading(false);
+    }
+  }
+
+  if (showConfirm) {
+    return (
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setShowConfirm(false)} style={{ padding: "10px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600, border: "1px solid #333", background: "transparent", color: "#bbb", cursor: "pointer" }}>
+          戻る
+        </button>
+        <button onClick={handleCancel} disabled={loading} style={{ padding: "10px 20px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", background: "#e63946", color: "hsl(var(--foreground))", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+          {loading ? "処理中…" : "キャンセル確定"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={() => setShowConfirm(true)} style={{ padding: "10px 24px", borderRadius: 6, fontSize: 14, fontWeight: 600, border: "1px solid #e6394644", background: "rgba(230,57,70,0.1)", color: "#e63946", cursor: "pointer" }}>
+      キャンセル
+    </button>
+  );
+}

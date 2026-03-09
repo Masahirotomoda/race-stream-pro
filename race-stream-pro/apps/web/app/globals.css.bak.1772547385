@@ -1,0 +1,40 @@
+
+
+/* RSP_THEME_TOKENS_START */
+/* Theme tokens (light + dark) - fixes black-on-black across the app */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --muted-foreground: 215 20.2% 75%;
+    color-scheme: dark;
+  }
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --muted-foreground: 215 20.2% 75%;
+  color-scheme: dark;
+}
+
+.light {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  color-scheme: light;
+}
+
+html, body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+/* RSP_THEME_TOKENS_END */
