@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { sendCreatedEmail } from "@/app/lib/email";
+import { createAdminClient } from "@/app/lib/supabase/admin-client";
+import crypto from "node:crypto";
+
+export const runtime = "nodejs";
 
 async function createClient() {
   const cookieStore = await cookies();
@@ -15,6 +19,26 @@ async function createClient() {
       },
     }
   );
+}
+
+function mustInt(name: string, def: number) {
+  const v = process.env[name];
+  if (!v) return def;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+
+function randHex(len = 16) {
+  return crypto.randomBytes(Math.ceil(len / 2)).toString("hex").slice(0, len);
+}
+
+function buildSrtUrl(args: { host: string; port: number; streamid: string; passphrase: string }) {
+  const q = new URLSearchParams({
+    streamid: args.streamid,
+    passphrase: args.passphrase,
+    mode: "caller",
+  });
+  return `srt://${args.host}:${args.port}?${q.toString()}`;
 }
 
 // GET /api/reservations
@@ -41,50 +65,123 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  // 予約を作成
+  const planKey = body.plan_key;
+  const startIso = body.start_at; // UI側でISOにして送る想定
+  const endIso = body.end_at;
+
+  // ---- OBS枠の競合チェック（srt_obsのみ / pendingも枠消費 / 前後15分ブロック）----
+  if (planKey === "srt_obs") {
+    const capacity = mustInt("OBS_MAX_CONCURRENCY", 1);
+    const marginMin = mustInt("OBS_BLOCK_MARGIN_MINUTES", 15);
+
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    const rangeStart = new Date(start.getTime() - marginMin * 60 * 1000).toISOString();
+    const rangeEnd = new Date(end.getTime() + marginMin * 60 * 1000).toISOString();
+
+    const admin = createAdminClient();
+    const { count, error } = await admin
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_key", "srt_obs")
+      .in("status", ["pending", "confirmed"])
+      .lt("start_at", rangeEnd)
+      .gt("end_at", rangeStart);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if ((count ?? 0) >= capacity) {
+      return NextResponse.json(
+        { error: "満席のため、この時間帯は予約できません（OBS枠）。" },
+        { status: 409 }
+      );
+    }
+  }
+
+  // ---- 予約作成（pendingで仮押さえ）----
   const { data, error } = await supabase
     .from("reservations")
     .insert({
-        youtube_broadcast_url: body.youtube_broadcast_url ?? null,
-  twitch_channel_url: body.twitch_channel_url ?? null,
-user_id:     user.id,
-      name:        body.name,
-      plan_key:    body.plan_key,
-      start_at:    body.start_at,
-      end_at:      body.end_at,
-      stream_url:  body.stream_url  ?? null,
-      obs_scene:   body.obs_scene   ?? null,
-      notes:       body.notes       ?? null,
+      youtube_broadcast_url: body.youtube_broadcast_url ?? null,
+      twitch_channel_url: body.twitch_channel_url ?? null,
+      user_id: user.id,
+      name: body.name,
+      plan_key: planKey,
+      start_at: startIso,
+      end_at: endIso,
+      stream_url: body.stream_url ?? null,
+      obs_scene: body.obs_scene ?? null,
+      notes: body.notes ?? null,
       total_price: body.total_price,
-      status:      "pending",
+      status: "pending",
     })
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // プラン名を取得してメール送信（失敗してもレスポンスには影響させない）
+  // ---- SRT ID発行（予約時）----
+  try {
+    const admin = createAdminClient();
+    const maxIds = mustInt("SRT_MAX_IDS_PER_RESERVATION", 5);
+    const host = process.env.SRT_PUBLIC_HOST ?? "localhost";
+    const port = mustInt("SRT_PUBLIC_PORT", 20000);
+
+    const n = max(1, maxIds);
+
+    const items = Array.from({ length: n }, (_, i) => {
+      const streamid = `resv_${data.id}_${String(i + 1).padStart(2, "0")}`;
+      const passphrase = randHex(16);
+      return {
+        streamid,
+        passphrase,
+        srt_url: buildSrtUrl({ host, port, streamid, passphrase }),
+      };
+    });
+
+    await admin
+      .from("reservation_resources")
+      .upsert(
+        {
+          reservation_id: data.id,
+          kind: "srt",
+          data: {
+            issued_at: new Date().toISOString(),
+            max_ids: n,
+            host,
+            port,
+            items,
+          },
+        },
+        { onConflict: "reservation_id,kind" }
+      );
+  } catch (e: any) {
+    console.error("[srt] issue failed:", e?.message ?? e);
+  }
+
+  // ---- メール送信（失敗しても予約作成は成功扱い）----
   try {
     const { data: plan } = await supabase
       .from("plans")
       .select("name")
-      .eq("key", body.plan_key)
+      .eq("key", planKey)
       .single();
 
     await sendCreatedEmail(user.email!, {
-      name:       body.name,
-      planName:   plan?.name ?? body.plan_key,
-      startAt:    body.start_at,
-      endAt:      body.end_at,
+      name: body.name,
+      planName: plan?.name ?? planKey,
+      startAt: startIso,
+      endAt: endIso,
       totalPrice: body.total_price,
-      streamUrl:  body.stream_url,
-      obsScene:   body.obs_scene,
-      notes:      body.notes,
+      streamUrl: body.stream_url,
+      obsScene: body.obs_scene,
+      notes: body.notes,
     });
-    console.log("[email] 予約受付メール送信:", user.email);
+    console.log("[email] reservation created:", user.email);
   } catch (emailErr) {
-    console.error("[email] 送信エラー（予約は作成済み）:", emailErr);
+    console.error("[email] error:", emailErr);
   }
 
   return NextResponse.json({ item: data }, { status: 201 });
 }
+
+function max(a: number, b: number) { return a > b ? a : b; }

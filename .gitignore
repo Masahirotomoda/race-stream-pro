@@ -15,3 +15,8 @@ out/
 
 # OS
 .DS_Store
+
+# local work files
+gitpatch/
+*.bak
+*.bak.*
