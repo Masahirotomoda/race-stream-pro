@@ -10,7 +10,7 @@ async function signOutHandler() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) {
+        setAll(cs: any[]) {
           cs.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
           );

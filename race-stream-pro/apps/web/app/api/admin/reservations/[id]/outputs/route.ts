@@ -21,7 +21,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+        setAll(cs: any[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
       },
     }
   );
@@ -74,7 +74,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+        setAll(cs: any[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
       },
     }
   );

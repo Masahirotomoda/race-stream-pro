@@ -5,6 +5,13 @@ import { redirect } from "next/navigation";
 import { isAdmin } from "@/app/lib/admin";
 import { createAdminClient } from "@/app/lib/supabase/admin-client";
 
+type CookieToSet = {
+  name: string
+  value: string
+  options?: any
+}
+
+
 export const dynamic = "force-dynamic";
 
 async function getUser() {
@@ -15,7 +22,7 @@ async function getUser() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+        setAll(cs: CookieToSet[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
       },
     }
   );

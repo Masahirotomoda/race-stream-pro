@@ -28,9 +28,16 @@ export async function GET(req: Request) {
     mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
     {
       cookies: {
-        get(name) { return cookieStore.get(name)?.value; },
-        set(name, value, options) { cookieStore.set({ name, value, ...options }); },
-        remove(name, options) { cookieStore.set({ name, value: "", ...options, maxAge: 0 }); },
+        get(name: string): string | undefined {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any): void {
+          // Next.js の cookies().set は (name, value, options) が基本
+          cookieStore.set(name, value, options);
+        },
+        remove(name: string, options: any): void {
+          cookieStore.set(name, "", { ...(options ?? {}), maxAge: 0 });
+        },
       },
     }
   );

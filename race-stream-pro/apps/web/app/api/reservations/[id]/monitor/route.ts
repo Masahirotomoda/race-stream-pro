@@ -11,8 +11,8 @@ function mustEnv(name: string) {
   return v;
 }
 
-function createSupabaseServerClient() {
-  const cookieStore = cookies(); // Next.js cookies store
+async function createSupabaseServerClient() {
+  const cookieStore = await cookies(); // Next.js cookies store
   return createServerClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
@@ -22,7 +22,7 @@ function createSupabaseServerClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: any[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
@@ -104,7 +104,7 @@ async function getTwitchAppAccessToken() {
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });

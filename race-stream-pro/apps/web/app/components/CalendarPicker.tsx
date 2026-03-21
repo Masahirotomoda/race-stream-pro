@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   label: string;
@@ -72,7 +73,7 @@ export default function CalendarPicker({
   minDatetime,
   disabled,
   disabledTimes,
-  timePicker = "select",
+  timePicker = "slider_numeric",
 }: Props) {
   const { date: selectedDate, time: selectedTime } = parseValue(value);
 
@@ -96,19 +97,14 @@ export default function CalendarPicker({
   });
 
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const timePanelRef = useRef<HTMLDivElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
-  // close on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  // Portal position state (fixed coords)
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null);
 
   const minDate = minDatetime?.split("T")[0] ?? "";
   const minTime = minDatetime?.split("T")[1]?.slice(0, 5) ?? "";
@@ -139,12 +135,9 @@ export default function CalendarPicker({
   const allowedMinutes = useMemo(() => allowedTimes.map(timeToMinutes), [allowedTimes]);
 
   function snapToAllowedMinutes(targetMin: number) {
-    if (allowedMinutes.length === 0) return targetMin;
-
-    // exact
+    if (allowedMinutes.length == 0) return targetMin;
     if (allowedMinutes.includes(targetMin)) return targetMin;
 
-    // nearest (tie => forward)
     let best = allowedMinutes[0];
     let bestDist = Math.abs(best - targetMin);
 
@@ -154,7 +147,7 @@ export default function CalendarPicker({
         best = m;
         bestDist = dist;
       } else if (dist === bestDist && m > best) {
-        best = m;
+        best = m; // tie => forward
       }
     }
     return best;
@@ -169,7 +162,6 @@ export default function CalendarPicker({
   function handleDateClick(dateStr: string) {
     if (isDateDisabled(dateStr)) return;
 
-    // keep current time if allowed; else pick first allowed
     const preferred = selectedTime || "09:00";
     let next = preferred;
 
@@ -180,21 +172,10 @@ export default function CalendarPicker({
 
     onChange(`${dateStr}T${next}`);
 
-    // after selecting date, ensure time panel is visible and focus the numeric input
     setTimeout(() => {
       timePanelRef.current?.scrollIntoView({ block: "nearest" });
       timeInputRef.current?.focus();
     }, 0);
-  }
-
-  function handleTimeChange(time: string) {
-    if (!selectedDate) return;
-    if (isTimeDisabled(selectedDate, time)) {
-      // if user typed a disabled time (via input), snap it
-      setTimeMinutes(timeToMinutes(time));
-      return;
-    }
-    onChange(`${selectedDate}T${time}`);
   }
 
   function prevMonth() {
@@ -225,7 +206,7 @@ export default function CalendarPicker({
     return timeToMinutes(selectedTime);
   }, [selectedTime]);
 
-  // build blocked ranges for small "availability bar"
+  // compute blocked ranges (for overlay bar)
   const blockedRanges = useMemo(() => {
     if (!selectedDate) return [];
     const blocked = TIME_OPTIONS.filter((t) => isTimeDisabled(selectedDate, t)).map(timeToMinutes);
@@ -250,6 +231,316 @@ export default function CalendarPicker({
     return ranges;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, minDate, minTime, (disabledTimes ?? []).join(",")]);
+
+  // --- Portal positioning ---
+  function computePos() {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+
+    const margin = 6;
+    const dropdownMaxH = Math.min(window.innerHeight * 0.70, 520);
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = spaceBelow < dropdownMaxH + 20; // heuristic
+
+    const width = Math.min(Math.max(r.width, 320), 460);
+    let left = r.left;
+    if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8);
+    if (left < 8) left = 8;
+
+    const top = openUp ? (r.top - margin) : (r.bottom + margin);
+    setPos({ left, top, width, openUp });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    computePos();
+    const onResize = () => computePos();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, true); // capture scroll in containers too
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // close on outside click (portal overlay handles it; still keep ESC)
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const dropdown = open && mounted && pos
+    ? createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 2000 }}
+          onMouseDown={() => setOpen(false)}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              left: pos.left,
+              // openUp: anchor at bottom by translating using maxHeight
+              top: pos.openUp ? undefined : pos.top,
+              bottom: pos.openUp ? (window.innerHeight - pos.top) : undefined,
+              width: pos.width,
+              background: "#161616",
+              border: "1px solid #2a2a2a",
+              borderRadius: 10,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+              maxHeight: "min(70vh, 520px)",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <button
+                  type="button"
+                  onClick={prevMonth}
+                  style={{ background: "none", border: "1px solid #2a2a2a", borderRadius: 4, color: "#bbb", fontSize: 14, padding: "4px 10px", cursor: "pointer" }}
+                >
+                  ◀
+                </button>
+                <span style={{ fontWeight: 700, fontSize: 14, color: "hsl(var(--foreground))" }}>
+                  {viewYear}年 {viewMonth + 1}月
+                </span>
+                <button
+                  type="button"
+                  onClick={nextMonth}
+                  style={{ background: "none", border: "1px solid #2a2a2a", borderRadius: 4, color: "#bbb", fontSize: 14, padding: "4px 10px", cursor: "pointer" }}
+                >
+                  ▶
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+                {WEEKDAYS.map((w, i) => (
+                  <div
+                    key={w}
+                    style={{
+                      textAlign: "center",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: i === 0 ? "#f87171" : i === 6 ? "#93c5fd" : "#999",
+                      padding: "4px 0",
+                    }}
+                  >
+                    {w}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+                {cells.map((day, idx) => {
+                  if (!day) return <div key={idx} />;
+                  const dateStr = formatDate(viewYear, viewMonth, day);
+                  const dis = isDateDisabled(dateStr);
+                  const sel = selectedDate === dateStr;
+                  const isToday = mounted && todayStr !== "" && dateStr === todayStr;
+                  const col = idx % 7;
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleDateClick(dateStr)}
+                      disabled={dis}
+                      suppressHydrationWarning
+                      style={{
+                        padding: "7px 2px",
+                        borderRadius: 5,
+                        fontSize: 13,
+                        fontWeight: sel ? 800 : 400,
+                        border: isToday && !sel ? "1px solid #555" : "none",
+                        background: sel ? "#e63946" : "transparent",
+                        color: dis ? "#333" : sel ? "#fff" : col === 0 ? "#f87171" : col === 6 ? "#93c5fd" : "#ccc",
+                        cursor: dis ? "not-allowed" : "pointer",
+                        transition: "background 0.1s",
+                      }}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ height: 12 }} />
+            </div>
+
+            {/* sticky time panel */}
+            <div
+              ref={timePanelRef}
+              style={{
+                position: "sticky",
+                bottom: 0,
+                background: "#161616",
+                borderTop: "1px solid #222",
+                padding: 16,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  時刻
+                </div>
+                <div style={{ fontSize: 12, color: "#999" }}>15分刻み／満席は自動スナップ</div>
+              </div>
+
+              {!selectedDate && <div style={{ marginTop: 8, fontSize: 13, color: "#aaa" }}>先に日付を選択してください</div>}
+              {selectedDate && allowedTimes.length === 0 && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#ef4444" }}>この日は選択可能な時刻がありません</div>
+              )}
+
+              {selectedDate && allowedTimes.length > 0 && timePicker === "slider_numeric" && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{selectedTime || allowedTimes[0]}</div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 12, color: "#aaa" }}>直接入力</span>
+                      <input
+                        ref={timeInputRef}
+                        type="time"
+                        step={900}
+                        value={selectedTime || allowedTimes[0]}
+                        onChange={(e) => {
+                          const t = e.target.value.slice(0, 5);
+                          setTimeMinutes(timeToMinutes(t));
+                        }}
+                        style={{
+                          background: "#1a1a1a",
+                          border: "1px solid #2a2a2a",
+                          borderRadius: 6,
+                          color: "#fff",
+                          padding: "6px 10px",
+                          fontSize: 14,
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setTimeMinutes(sliderMin - 15)}
+                      style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #2a2a2a", background: "#1a1a1a", color: "#fff", cursor: "pointer" }}
+                    >
+                      -15
+                    </button>
+
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={24 * 60 - 15}
+                        step={15}
+                        value={sliderMin}
+                        onChange={(e) => setTimeMinutes(Number(e.target.value))}
+                        style={{ width: "100%" }}
+                      />
+
+                      <div style={{ position: "relative", height: 6, marginTop: 6, borderRadius: 999, background: "#222" }}>
+                        {blockedRanges.map((r, i) => {
+                          const left = (r.start / 1440) * 100;
+                          const width = ((r.end - r.start) / 1440) * 100;
+                          return (
+                            <div
+                              key={i}
+                              style={{
+                                position: "absolute",
+                                left: `${left}%`,
+                                width: `${width}%`,
+                                top: 0,
+                                bottom: 0,
+                                borderRadius: 999,
+                                background: "rgba(239, 68, 68, 0.55)",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12, color: "#999" }}>
+                        <span>00:00</span>
+                        <span>12:00</span>
+                        <span>23:45</span>
+                      </div>
+
+                      <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#bbb" }}>
+                        <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "rgba(239, 68, 68, 0.55)" }} />
+                        <span>満席</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setTimeMinutes(sliderMin + 15)}
+                      style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #2a2a2a", background: "#1a1a1a", color: "#fff", cursor: "pointer" }}
+                    >
+                      +15
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedDate && allowedTimes.length > 0 && timePicker === "select" && (
+                <div style={{ marginTop: 10 }}>
+                  <select
+                    value={selectedTime}
+                    onChange={(e) => {
+                      const t = e.target.value;
+                      if (selectedDate) onChange(`${selectedDate}T${t}`);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      background: "#1a1a1a",
+                      border: "1px solid #2a2a2a",
+                      borderRadius: 6,
+                      color: "#fff",
+                      fontSize: 14,
+                      outline: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {TIME_OPTIONS.map((t) => (
+                      <option key={t} value={t} disabled={selectedDate ? isTimeDisabled(selectedDate, t) : false} style={{ color: selectedDate && isTimeDisabled(selectedDate, t) ? "#555" : "#fff" }}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={{
+                  marginTop: 12,
+                  width: "100%",
+                  padding: "9px",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  border: "none",
+                  background: "linear-gradient(135deg, #e63946, #c1121f)",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                決定
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <div ref={rootRef} style={{ position: "relative" }}>
@@ -299,266 +590,7 @@ export default function CalendarPicker({
         <span style={{ color: "hsl(var(--muted-foreground))", fontSize: 16 }}>📅</span>
       </button>
 
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            zIndex: 100,
-            background: "#161616",
-            border: "1px solid #2a2a2a",
-            borderRadius: 10,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-            minWidth: 320,
-            maxWidth: 460,
-            maxHeight: "min(70vh, 520px)",
-            overflowY: "auto",
-          }}
-        >
-          <div style={{ padding: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <button
-                type="button"
-                onClick={prevMonth}
-                style={{ background: "none", border: "1px solid #2a2a2a", borderRadius: 4, color: "#bbb", fontSize: 14, padding: "4px 10px", cursor: "pointer" }}
-              >
-                ◀
-              </button>
-              <span style={{ fontWeight: 700, fontSize: 14, color: "hsl(var(--foreground))" }}>
-                {viewYear}年 {viewMonth + 1}月
-              </span>
-              <button
-                type="button"
-                onClick={nextMonth}
-                style={{ background: "none", border: "1px solid #2a2a2a", borderRadius: 4, color: "#bbb", fontSize: 14, padding: "4px 10px", cursor: "pointer" }}
-              >
-                ▶
-              </button>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
-              {WEEKDAYS.map((w, i) => (
-                <div
-                  key={w}
-                  style={{
-                    textAlign: "center",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: i === 0 ? "#f87171" : i === 6 ? "#93c5fd" : "#999",
-                    padding: "4px 0",
-                  }}
-                >
-                  {w}
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
-              {cells.map((day, idx) => {
-                if (!day) return <div key={idx} />;
-                const dateStr = formatDate(viewYear, viewMonth, day);
-                const dis = isDateDisabled(dateStr);
-                const sel = selectedDate === dateStr;
-                const isToday = mounted && todayStr !== "" && dateStr === todayStr;
-                const col = idx % 7;
-
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleDateClick(dateStr)}
-                    disabled={dis}
-                    suppressHydrationWarning
-                    style={{
-                      padding: "7px 2px",
-                      borderRadius: 5,
-                      fontSize: 13,
-                      fontWeight: sel ? 800 : 400,
-                      border: isToday && !sel ? "1px solid #555" : "none",
-                      background: sel ? "#e63946" : "transparent",
-                      color: dis ? "#333" : sel ? "#fff" : col === 0 ? "#f87171" : col === 6 ? "#93c5fd" : "#ccc",
-                      cursor: dis ? "not-allowed" : "pointer",
-                      transition: "background 0.1s",
-                    }}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ height: 12 }} />
-          </div>
-
-          {/* sticky time panel */}
-          <div
-            ref={timePanelRef}
-            style={{
-              position: "sticky",
-              bottom: 0,
-              background: "#161616",
-              borderTop: "1px solid #222",
-              padding: 16,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                時刻
-              </div>
-              <div style={{ fontSize: 12, color: "#999" }}>15分刻み／満席は自動スナップ</div>
-            </div>
-
-            {!selectedDate && <div style={{ marginTop: 8, fontSize: 13, color: "#aaa" }}>先に日付を選択してください</div>}
-            {selectedDate && allowedTimes.length === 0 && (
-              <div style={{ marginTop: 8, fontSize: 13, color: "#ef4444" }}>この日は選択可能な時刻がありません</div>
-            )}
-
-            {selectedDate && allowedTimes.length > 0 && timePicker === "slider_numeric" && (
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* current time */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{selectedTime || allowedTimes[0]}</div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 12, color: "#aaa" }}>直接入力</span>
-                    <input
-                      ref={timeInputRef}
-                      type="time"
-                      step={900}
-                      value={selectedTime || allowedTimes[0]}
-                      onChange={(e) => {
-                        const t = e.target.value.slice(0, 5);
-                        // round + snap
-                        setTimeMinutes(timeToMinutes(t));
-                      }}
-                      style={{
-                        background: "#1a1a1a",
-                        border: "1px solid #2a2a2a",
-                        borderRadius: 6,
-                        color: "#fff",
-                        padding: "6px 10px",
-                        fontSize: 14,
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* slider row */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setTimeMinutes(sliderMin - 15)}
-                    style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #2a2a2a", background: "#1a1a1a", color: "#fff", cursor: "pointer" }}
-                  >
-                    -15
-                  </button>
-
-                  <div style={{ flex: 1 }}>
-                    <input
-                      type="range"
-                      min={0}
-                      max={24 * 60 - 15}
-                      step={15}
-                      value={sliderMin}
-                      onChange={(e) => setTimeMinutes(Number(e.target.value))}
-                      style={{ width: "100%" }}
-                    />
-
-                    {/* blocked overlay bar */}
-                    <div style={{ position: "relative", height: 6, marginTop: 6, borderRadius: 999, background: "#222" }}>
-                      {blockedRanges.map((r, i) => {
-                        const left = (r.start / 1440) * 100;
-                        const width = ((r.end - r.start) / 1440) * 100;
-                        return (
-                          <div
-                            key={i}
-                            style={{
-                              position: "absolute",
-                              left: `${left}%`,
-                              width: `${width}%`,
-                              top: 0,
-                              bottom: 0,
-                              borderRadius: 999,
-                              background: "rgba(239, 68, 68, 0.55)",
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12, color: "#999" }}>
-                      <span>00:00</span>
-                      <span>12:00</span>
-                      <span>23:45</span>
-                    </div>
-
-                    <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#bbb" }}>
-                      <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "rgba(239, 68, 68, 0.55)" }} />
-                      <span>満席</span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setTimeMinutes(sliderMin + 15)}
-                    style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #2a2a2a", background: "#1a1a1a", color: "#fff", cursor: "pointer" }}
-                  >
-                    +15
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {selectedDate && allowedTimes.length > 0 && timePicker === "select" && (
-              <div style={{ marginTop: 10 }}>
-                <select
-                  value={selectedTime}
-                  onChange={(e) => handleTimeChange(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    background: "#1a1a1a",
-                    border: "1px solid #2a2a2a",
-                    borderRadius: 6,
-                    color: "#fff",
-                    fontSize: 14,
-                    outline: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  {TIME_OPTIONS.map((t) => (
-                    <option key={t} value={t} disabled={selectedDate ? isTimeDisabled(selectedDate, t) : false} style={{ color: selectedDate && isTimeDisabled(selectedDate, t) ? "#555" : "#fff" }}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {selectedDate && (selectedTime || allowedTimes.length > 0) && (
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                style={{
-                  marginTop: 12,
-                  width: "100%",
-                  padding: "9px",
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 800,
-                  border: "none",
-                  background: "linear-gradient(135deg, #e63946, #c1121f)",
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                決定
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }

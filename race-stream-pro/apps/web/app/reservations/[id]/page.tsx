@@ -14,7 +14,7 @@ async function createClient() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+        setAll(cs: any[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
       },
     }
   );
@@ -135,50 +135,83 @@ export default async function ReservationDetailPage({
         </div>
 
         
-        {/* 接続情報 */}
+                {/* 接続情報 */}
         <div style={{ background:"#111", border:"1px solid #222", borderRadius:12, overflow:"hidden", marginBottom:24 }}>
           <div style={{ padding:"14px 28px", borderBottom:"1px solid #1e1e1e", fontSize:13, fontWeight:700, color:"#999", letterSpacing:"0.08em", textTransform:"uppercase" }}>
             接続情報
           </div>
-          <div style={{ padding:"18px 28px", color:"#e0e0e0", fontSize:14 }}>
-            {r.provision_status !== "ready" ? (
-              <div style={{ color:"#bbb" }}>
-                現在の状態: <b style={{ color:"#e63946" }}>{r.provision_status}</b><br />
-                {r.provision_status === "queued" || r.provision_status === "running"
-                  ? "準備中です。しばらく待ってから再読み込みしてください。"
-                  : r.provision_status === "failed"
-                  ? "準備に失敗しました。管理者に連絡してください。"
-                  : "未準備です（確定後に準備が開始されます）。"}
-              </div>
-            ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {srt?.srt_url && (
-                  <div style={{ background:"#0f0f0f", border:"1px solid #222", borderRadius:10, padding:"14px 14px" }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#999", marginBottom:8 }}>SRT URL（ワンライナー）</div>
-                    <code style={{ display:"block", fontSize:13, color:"#fff", wordBreak:"break-all" }}>{srt.srt_url}</code>
-                    <div style={{ fontSize:13, color:"#aaa", marginTop:8 }}>
-                      ※ OBS などの SRT 出力に貼り付けてください
-                    </div>
-                  </div>
-                )}
 
-                {win && (
-                  <div style={{ background:"#0f0f0f", border:"1px solid #222", borderRadius:10, padding:"14px 14px" }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#999", marginBottom:8 }}>Windows（OBS）接続</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"120px 1fr", gap:"8px 10px", fontSize:13 }}>
-                      <div style={{ color:"#aaa" }}>RDP Host</div><div style={{ color:"#fff" }}>{win.rdp_host}:{win.rdp_port}</div>
-                      <div style={{ color:"#aaa" }}>Username</div><div style={{ color:"#fff" }}>{win.username}</div>
-                      <div style={{ color:"#aaa" }}>Password</div><div style={{ color:"#fff" }}>{win.password}</div>
-                    </div>
-                    {win.note && <div style={{ fontSize:13, color:"#aaa", marginTop:10 }}>{win.note}</div>}
+          <div style={{ padding:"18px 28px", color:"#e0e0e0", fontSize:14 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+              {/* 状態表示（ready以外のとき） */}
+              {r.provision_status !== "ready" && (
+                <div style={{ color:"#bbb" }}>
+                  現在の状態: <b style={{ color:"#e63946" }}>{r.provision_status}</b><br />
+                  {r.provision_status === "queued" || r.provision_status === "running"
+                    ? "準備中です。しばらく待ってから再読み込みしてください。"
+                    : r.provision_status === "failed"
+                    ? "準備に失敗しました。管理者に連絡してください。"
+                    : "未準備です（確定後に準備が開始されます）。"}
+                </div>
+              )}
+
+              {/* SRT は queued でも表示（予約時に発行済みのため） */}
+              {(srt?.items?.length ?? 0) > 0 ? (
+                <div style={{ background:"#0f0f0f", border:"1px solid #222", borderRadius:10, padding:"14px 14px" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#999", marginBottom:8 }}>
+                    SRT 受信アドレス（カメラごと）
                   </div>
-                )}
-              </div>
-            )}
+                  <div style={{ fontSize:13, color:"#aaa", marginBottom:10 }}>
+                    ※ スマートフォン／ネットワークカメラ側の SRT 送信先として貼り付けてください（{srt?.camera_count ?? srt?.items?.length} 台）
+                  </div>
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {srt.items.map((it: any, idx: number) => (
+                      <div key={it.streamid ?? idx} style={{ padding:"10px 10px", border:"1px solid #222", borderRadius:8, background:"#111" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10 }}>
+                          <div style={{ fontWeight:800, color:"#fff" }}>カメラ {idx + 1}</div>
+                          <div style={{ fontSize:12, color:"#aaa", fontFamily:"monospace" }}>{it.streamid}</div>
+                        </div>
+                        <code style={{ display:"block", marginTop:6, fontSize:13, color:"#fff", wordBreak:"break-all" }}>
+                          {it.srt_url}
+                        </code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : srt?.srt_url ? (
+                <div style={{ background:"#0f0f0f", border:"1px solid #222", borderRadius:10, padding:"14px 14px" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#999", marginBottom:8 }}>SRT URL（ワンライナー）</div>
+                  <code style={{ display:"block", fontSize:13, color:"#fff", wordBreak:"break-all" }}>{srt.srt_url}</code>
+                  <div style={{ fontSize:13, color:"#aaa", marginTop:8 }}>
+                    ※ スマートフォン／ネットワークカメラ側の SRT 送信先として貼り付けてください
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color:"#bbb" }}>
+                  SRT 情報はまだ発行されていません。
+                </div>
+              )}
+
+              {/* Windows(OBS) は ready のときだけ表示 */}
+              {r.provision_status === "ready" && win && (
+                <div style={{ background:"#0f0f0f", border:"1px solid #222", borderRadius:10, padding:"14px 14px" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#999", marginBottom:8 }}>Windows（OBS）接続</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"120px 1fr", gap:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#aaa" }}>RDP Host</div><div style={{ color:"#fff" }}>{win.rdp_host}:{win.rdp_port}</div>
+                    <div style={{ color:"#aaa" }}>Username</div><div style={{ color:"#fff" }}>{win.username}</div>
+                    <div style={{ color:"#aaa" }}>Password</div><div style={{ color:"#fff" }}>{win.password}</div>
+                  </div>
+                  {win.note && <div style={{ fontSize:13, color:"#aaa", marginTop:10 }}>{win.note}</div>}
+                </div>
+              )}
+
+            </div>
           </div>
         </div>
 
-        {/* Action buttons */}
+{/* Action buttons */}
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
           <a href="/reservations" style={{ padding: "10px 24px", borderRadius: 6, fontSize: 14, fontWeight: 600, textDecoration: "none", color: "#bbb", border: "1px solid #333", background: "transparent" }}>一覧に戻る</a>
           {r.status !== "cancelled" && (

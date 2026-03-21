@@ -9,6 +9,8 @@ import {
   sendTimeChangedEmail,
 } from "@/app/lib/email";
 
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
 
 async function enqueueProvisionJob(admin: ReturnType<typeof createAdminClient>, reservationId: string) {
   // provision_status を queued にして job を追加
@@ -29,7 +31,7 @@ async function getUser() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+        setAll(cs: any[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
       },
     }
   );
@@ -102,7 +104,7 @@ export async function PUT(
         console.log("[email] 時間変更メール送信:", info.userEmail);
       }
     }
-  } catch (emailErr) {
+  } catch (emailErr: unknown) {
     console.error("[email] 送信エラー（更新は完了済み）:", emailErr);
   }
 
@@ -112,9 +114,11 @@ export async function PUT(
       await enqueueProvisionJob(admin, id);
       console.log("[provision] enqueued (PUT)", id);
     }
-  } catch (e) {
-    console.error("[provision] enqueue failed (PUT)", e?.message ?? e);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("[provision] enqueue failed (PUT)", msg)
   }
+
 
   return NextResponse.json({ item: data });
 }
@@ -168,18 +172,8 @@ export async function PATCH(
         console.log("[email] キャンセルメール送信:", info.userEmail);
       }
     }
-  } catch (emailErr) {
+  } catch (emailErr: unknown) {
     console.error("[email] 送信エラー（更新は完了済み）:", emailErr);
-  }
-
-    // confirmed になったらプロビジョニング開始（1.A）
-  try {
-    if ((body?.status ?? null) === "confirmed") {
-      await enqueueProvisionJob(admin, id);
-      console.log("[provision] enqueued (PUT)", id);
-    }
-  } catch (e) {
-    console.error("[provision] enqueue failed (PUT)", e?.message ?? e);
   }
 
     // confirmed になったらプロビジョニング開始（1.A）
@@ -188,8 +182,8 @@ export async function PATCH(
       await enqueueProvisionJob(admin, id);
       console.log("[provision] enqueued (PATCH)", id);
     }
-  } catch (e) {
-    console.error("[provision] enqueue failed (PATCH)", e?.message ?? e);
+  } catch (e: unknown) {
+    console.error("[provision] enqueue failed (PATCH)", errMsg(e));
   }
 
 return NextResponse.json({ item: data });
@@ -235,7 +229,7 @@ export async function DELETE(
     try {
       await sendCancelledEmail(userEmail, emailData);
       console.log("[email] 削除通知メール送信:", userEmail);
-    } catch (emailErr) {
+    } catch (emailErr: unknown) {
       console.error("[email] 送信エラー:", emailErr);
     }
   }

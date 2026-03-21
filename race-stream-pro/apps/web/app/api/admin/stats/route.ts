@@ -55,7 +55,7 @@ export async function GET() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) {
+        setAll(cs: any[]) {
           cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
         },
       },
@@ -95,7 +95,7 @@ export async function GET() {
   // stale running jobs（locked_at が古い）
   const staleRunningP = countExact(admin, "provisioning_jobs", [
     ["eq", "status", "running"],
-    ["not_is", "locked_at", None],
+    ["not_is", "locked_at", null],
     ["lt", "locked_at", staleBorderIso],
   ]).catch(() => 0);
 

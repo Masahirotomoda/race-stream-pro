@@ -1,0 +1,13 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+# 依存が必要なら npm ci（package-lock.json がある前提）
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# ソースコピー（worker/provisioner.mjs を含む）
+COPY . .
+
+# Worker 起動（ESM .mjs）
+CMD ["node", "worker/provisioner.mjs"]

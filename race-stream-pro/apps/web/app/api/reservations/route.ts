@@ -15,7 +15,7 @@ async function createClient() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+        setAll(cs: any[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
       },
     }
   );
@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
       obs_scene: body.obs_scene ?? null,
       notes: body.notes ?? null,
       total_price: body.total_price,
+      camera_count: body.camera_count ?? 1,
       status: "pending",
     })
     .select()
@@ -126,12 +127,21 @@ export async function POST(req: NextRequest) {
     const host = process.env.SRT_PUBLIC_HOST ?? "localhost";
     const port = mustInt("SRT_PUBLIC_PORT", 20000);
 
-    const n = max(1, maxIds);
+    // リクエストの camera_count を優先（未指定は1）
+    const requested = Number(body.camera_count ?? 1);
+    const cameraCount = Math.min(
+      Math.max(1, Number.isFinite(requested) ? Math.floor(requested) : 1),
+      Math.max(1, maxIds)
+    );
 
-    const items = Array.from({ length: n }, (_, i) => {
-      const streamid = `resv_${data.id}_${String(i + 1).padStart(2, "0")}`;
+    const shortId = String(data.id).slice(0, 8);
+
+    const items = Array.from({ length: cameraCount }, (_, i) => {
+      const cameraNo = i + 1;
+      const streamid = `cam${cameraNo}-${shortId}`;
       const passphrase = randHex(16);
       return {
+        camera_index: cameraNo,
         streamid,
         passphrase,
         srt_url: buildSrtUrl({ host, port, streamid, passphrase }),
@@ -146,9 +156,10 @@ export async function POST(req: NextRequest) {
           kind: "srt",
           data: {
             issued_at: new Date().toISOString(),
-            max_ids: n,
+            max_ids: Math.max(1, maxIds),
             host,
             port,
+            camera_count: cameraCount,
             items,
           },
         },
