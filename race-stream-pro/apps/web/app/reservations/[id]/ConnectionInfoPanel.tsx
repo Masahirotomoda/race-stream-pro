@@ -4,17 +4,22 @@ import { useState } from "react";
 
 type CamMode = "lmcam" | "larix";
 
-interface SrtCam {
+interface SrtItem {
+  srt_url: string;
+  streamid: string;
+  passphrase: string;
+  camera_index: number;
+}
+
+interface SrtData {
   host: string;
   port: number;
-  stream_id?: string;
-  streamId?: string;
-  passphrase: string;
-  mode?: string;
+  items: SrtItem[];
+  camera_count?: number;
 }
 
 interface Props {
-  srt?: SrtCam | SrtCam[] | null;
+  srt?: SrtData | null;
   win?: { ip?: string; username?: string; password?: string } | null;
   provisionStatus?: string;
   planKey?: string;
@@ -57,15 +62,15 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export default function ConnectionInfoPanel({ srt, win, provisionStatus, planKey }: Props) {
-  const cams: SrtCam[] = !srt ? [] : Array.isArray(srt) ? srt : [srt];
+  const items: SrtItem[] = srt?.items ?? [];
 
   const [modes, setModes] = useState<Record<number, CamMode>>(
-    Object.fromEntries(cams.map((_, i) => [i, "lmcam" as CamMode]))
+    Object.fromEntries(items.map((_, i) => [i, "lmcam" as CamMode]))
   );
   const setMode = (i: number, m: CamMode) =>
     setModes(prev => ({ ...prev, [i]: m }));
 
-  if (cams.length === 0 && !win?.ip) {
+  if (items.length === 0 && !win?.ip) {
     return (
       <div style={{ padding: "16px 0", color: "#555", fontSize: 13 }}>
         {provisionStatus === "pending"
@@ -77,16 +82,15 @@ export default function ConnectionInfoPanel({ srt, win, provisionStatus, planKey
 
   return (
     <div>
-      {cams.map((cam, i) => {
-        const sid = cam.stream_id ?? cam.streamId ?? "";
-        const mode = cam.mode ?? "caller";
-        const srtUrl = `srt://${cam.host}:${cam.port}?streamid=${sid}&passphrase=${cam.passphrase}&mode=${mode}`;
+      {items.map((cam, i) => {
         const t = modes[i] ?? "lmcam";
+        const obsUrl = `srt://${srt!.host}:${srt!.port}?streamid=${cam.streamid}&passphrase=${cam.passphrase}&mode=listener&latency=200000`;
 
         return (
           <div key={i} style={{ marginBottom: 16, padding: "14px 16px", background: "#0a0a0a", borderRadius: 8, border: "1px solid #1e1e1e" }}>
+            {/* カメラ番号 & モード切替 */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 10 }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: "#bbb" }}>📷 カメラ {i + 1}</span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: "#bbb" }}>📷 カメラ {cam.camera_index}</span>
               {(["lmcam", "larix"] as CamMode[]).map(opt => (
                 <label key={opt} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: t === opt ? "#60a5fa" : "#666", cursor: "pointer", fontWeight: t === opt ? 700 : 400 }}>
                   <input type="radio" name={`cam-${i}`} checked={t === opt} onChange={() => setMode(i, opt)} style={{ accentColor: "#60a5fa" }} />
@@ -97,42 +101,33 @@ export default function ConnectionInfoPanel({ srt, win, provisionStatus, planKey
 
             {t === "lmcam" ? (
               <>
-                <Row label="HOST"       value={cam.host} />
-                <Row label="PORT"       value={String(cam.port)} />
-                <Row label="STREAM ID"  value={sid} />
+                <Row label="HOST"       value={srt!.host} />
+                <Row label="PORT"       value={String(srt!.port)} />
+                <Row label="STREAM ID"  value={cam.streamid} />
                 <Row label="PASSPHRASE" value={cam.passphrase} />
-                <Row label="MODE"       value={mode} />
+                <Row label="MODE"       value="caller" />
               </>
             ) : (
               <>
-                <Row label="URL"        value={srtUrl} />
-                <Row label="STREAM ID"  value={sid} />
+                <Row label="URL"        value={cam.srt_url} />
+                <Row label="STREAM ID"  value={cam.streamid} />
                 <Row label="PASSPHRASE" value={cam.passphrase} />
                 <Row label="LATENCY"    value="200" />
               </>
             )}
-          </div>
-        );
-      })}
 
-      {planKey === "srt_obs" && cams.length > 0 && (
-        <div style={{ marginBottom: 16, padding: "14px 16px", background: "#0a0a0a", borderRadius: 8, border: "1px solid #1e1e1e" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#bbb", marginBottom: 10 }}>🎬 OBS 設定</div>
-          {cams.map((cam, i) => {
-            const sid = cam.stream_id ?? cam.streamId ?? "";
-            const obsUrl = `srt://${cam.host}:${cam.port}?streamid=${sid}&passphrase=${cam.passphrase}&mode=listener&latency=200000`;
-            return (
-              <div key={i} style={{ marginBottom: i < cams.length - 1 ? 12 : 0 }}>
-                <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  カメラ {i + 1}
+            {planKey === "srt_obs" && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1e1e1e" }}>
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  🎬 OBS 入力設定
                 </div>
                 <Row label="入力形式" value="mpegts" />
                 <Row label="入力URL"  value={obsUrl} />
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
+          </div>
+        );
+      })}
 
       {win?.ip && (
         <div style={{ padding: "14px 16px", background: "#0a0a0a", borderRadius: 8, border: "1px solid #1e1e1e" }}>
