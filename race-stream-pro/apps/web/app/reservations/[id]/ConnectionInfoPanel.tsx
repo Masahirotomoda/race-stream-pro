@@ -109,11 +109,12 @@ export default function ConnectionInfoPanel({ srt, win, provisionStatus, planKey
               </>
             ) : (
               <>
-                <Row label="URL"        value={cam.srt_url} />
-                <Row label="STREAM ID"  value={`publish:${cam.streamid}:rsp:${cam.passphrase}`} />
-                <Row label="PASSPHRASE" value={cam.passphrase} />
-                <Row label="LATENCY"    value="200" />
-              </>
+	        <Row label="URL"        value={`srt://${srt!.host}:${srt!.port}`} />
+	        <Row label="SRT MODE"   value="Caller" />
+	        <Row label="LATENCY"    value="200" />
+	        <Row label="PASSPHRASE" value="" />
+	        <Row label="STREAM ID"  value={`publish:${cam.streamid}:rsp:${cam.passphrase}`} />
+               </>
             )}
 
             {planKey === "srt_obs" && (
