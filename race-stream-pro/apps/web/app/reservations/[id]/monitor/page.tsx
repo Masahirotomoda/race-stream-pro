@@ -1,20 +1,37 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import LogoutButton from "@/app/components/LogoutButton";
 
+// ─── 既存の型 ───────────────────────────────────────────
 type ApiResp = any;
 
+// ─── SRTモニター用の型 ──────────────────────────────────
+type SrtCamera = {
+  cameraIndex: number;
+  path: string;
+  ready: boolean;
+  readyTime: string | null;
+  tracks: string[];
+  bytesReceived: number;
+  readerCount: number;
+  remoteAddr: string | null;
+  pktLostPct: string | null;
+};
+
+type SrtStatus = {
+  serverOk: boolean;
+  activePaths: number;
+  totalPaths: number;
+  cameras: SrtCamera[];
+  fetchedAt: string;
+  error?: string;
+};
+
+// ─── ユーティリティ ────────────────────────────────────
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 12,
-        padding: 14,
-        background: "rgba(255,255,255,0.03)",
-      }}
-    >
+    <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 14, background: "rgba(255,255,255,0.03)" }}>
       <div style={{ fontSize: 13, color: "rgba(255,255,255,0.78)", marginBottom: 8 }}>{title}</div>
       <div style={{ color: "rgba(255,255,255,0.92)" }}>{children}</div>
     </div>
@@ -29,6 +46,12 @@ function fmtSeconds(sec: number) {
   return `${hh}:${mm}:${ss}`;
 }
 
+function fmtBps(bps: number) {
+  if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(2)} Mbps`;
+  if (bps >= 1_000) return `${(bps / 1_000).toFixed(1)} kbps`;
+  return `${bps} bps`;
+}
+
 function parseYTVideoId(url: string): string | null {
   try {
     const u = new URL(url);
@@ -39,9 +62,7 @@ function parseYTVideoId(url: string): string | null {
     const liveIdx = parts.indexOf("live");
     if (liveIdx >= 0 && liveIdx + 1 < parts.length) return parts[liveIdx + 1];
     return null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function parseTwitchChannel(url: string): string | null {
@@ -50,18 +71,73 @@ function parseTwitchChannel(url: string): string | null {
     const ch = u.pathname.split("/").filter(Boolean)[0];
     if (!ch || ch === "videos") return null;
     return ch.toLowerCase();
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
+// ─── SRTカメラカードコンポーネント ──────────────────────
+function SrtCameraCard({ cam, bps, now }: { cam: SrtCamera; bps: number | null; now: number }) {
+  const elapsed = cam.readyTime ? (now - Date.parse(cam.readyTime)) / 1000 : null;
+  const statusColor = cam.ready ? "#4ade80" : "rgba(255,255,255,0.35)";
+  const statusLabel = cam.ready ? "● LIVE" : "○ OFFLINE";
+
+  return (
+    <div style={{
+      border: `1px solid ${cam.ready ? "rgba(74,222,128,0.35)" : "rgba(255,255,255,0.10)"}`,
+      borderRadius: 10,
+      padding: 12,
+      background: cam.ready ? "rgba(74,222,128,0.04)" : "rgba(255,255,255,0.02)",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Camera {cam.cameraIndex}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: statusColor }}>{statusLabel}</span>
+      </div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", lineHeight: 2.0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0 10px" }}>
+          <span>ビットレート</span>
+          <span style={{ color: "rgba(255,255,255,0.92)", fontWeight: 600 }}>
+            {bps != null ? fmtBps(bps) : cam.ready ? "計測中…" : "—"}
+          </span>
+          <span>コーデック</span>
+          <span style={{ color: "rgba(255,255,255,0.92)" }}>
+            {cam.tracks.length > 0 ? cam.tracks.join(" + ") : "—"}
+          </span>
+          <span>接続時間</span>
+          <span style={{ color: "rgba(255,255,255,0.92)" }}>
+            {elapsed != null ? fmtSeconds(elapsed) : "—"}
+          </span>
+          <span>パケットロス</span>
+          <span style={{ color: cam.pktLostPct && parseFloat(cam.pktLostPct) > 1 ? "#f87171" : "rgba(255,255,255,0.92)" }}>
+            {cam.pktLostPct != null ? `${cam.pktLostPct}%` : "—"}
+          </span>
+          <span>受信側(OBS)</span>
+          <span style={{ color: "rgba(255,255,255,0.92)" }}>
+            {cam.readerCount > 0 ? `${cam.readerCount} 接続中` : "未接続"}
+          </span>
+          <span>送信元IP</span>
+          <span style={{ color: "rgba(255,255,255,0.70)", fontSize: 11 }}>
+            {cam.remoteAddr ?? "—"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── メインページ ──────────────────────────────────────
 export default function ReservationMonitorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
+  // 既存 state
   const [data, setData] = useState<ApiResp | null>(null);
   const [err, setErr] = useState("");
   const [now, setNow] = useState(Date.now());
 
+  // SRT state
+  const [srt, setSrt] = useState<SrtStatus | null>(null);
+  const prevBytesRef = useRef<Map<string, { bytes: number; time: number }>>(new Map());
+  const [bpsMap, setBpsMap] = useState<Map<string, number>>(new Map());
+
+  // 既存 fetch
   async function load() {
     setErr("");
     try {
@@ -77,32 +153,54 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
     }
   }
 
+  // SRT fetch（5秒ごと）
+  async function loadSrt() {
+    try {
+      const res = await fetch(`/api/srt-status?reservationId=${id}`, { cache: "no-store" });
+      const json: SrtStatus = await res.json();
+
+      // ビットレート計算（前回との差分 bytes/秒）
+      const nowMs = Date.now();
+      const newBps = new Map<string, number>();
+      for (const cam of json.cameras ?? []) {
+        const prev = prevBytesRef.current.get(cam.path);
+        if (prev) {
+          const dt = (nowMs - prev.time) / 1000;
+          const db = cam.bytesReceived - prev.bytes;
+          if (dt > 0 && db >= 0) newBps.set(cam.path, Math.round((db * 8) / dt));
+        }
+        prevBytesRef.current.set(cam.path, { bytes: cam.bytesReceived, time: nowMs });
+      }
+      setBpsMap(newBps);
+      setSrt(json);
+    } catch {
+      setSrt({ serverOk: false, cameras: [], activePaths: 0, totalPaths: 0, fetchedAt: new Date().toISOString(), error: "fetch failed" });
+    }
+  }
+
   useEffect(() => {
     load();
-    const t1 = window.setInterval(load, 10000); // 10秒ごとに更新
-    const t2 = window.setInterval(() => setNow(Date.now()), 1000); // タイマー更新
-    return () => { window.clearInterval(t1); window.clearInterval(t2); };
+    loadSrt();
+    const t1 = window.setInterval(load, 10000);
+    const t2 = window.setInterval(() => setNow(Date.now()), 1000);
+    const t3 = window.setInterval(loadSrt, 5000); // SRTは5秒ごと
+    return () => { window.clearInterval(t1); window.clearInterval(t2); window.clearInterval(t3); };
   }, [id]);
 
   const ytUrl = data?.youtube?.url ?? null;
   const twUrl = data?.twitch?.url ?? null;
-
   const ytVideoId = useMemo(() => (ytUrl ? parseYTVideoId(ytUrl) : null), [ytUrl]);
   const twChannel = useMemo(() => (twUrl ? parseTwitchChannel(twUrl) : null), [twUrl]);
-
   const twitchParent = useMemo(() => {
     if (typeof window === "undefined") return "localhost";
     return window.location.hostname || "localhost";
   }, []);
-
   const startedAt = useMemo(() => {
-    // “配信時間”は、取得できるならプラットフォームの startedAt を優先
     const tw = data?.twitch?.startedAt ?? null;
     const yt = data?.youtube?.startedAt ?? null;
     const r = data?.reservation?.start_at ?? null;
     return tw ?? yt ?? r ?? null;
   }, [data]);
-
   const elapsed = useMemo(() => {
     if (!startedAt) return null;
     const t = Date.parse(startedAt);
@@ -110,73 +208,128 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
     return (now - t) / 1000;
   }, [startedAt, now]);
 
+  // カメラ数（SRTリソースから取得、なければsrtのcameras数）
+  const cameraCount = srt?.cameras?.length ?? 0;
+
   return (
     <div style={{ padding: 18, maxWidth: 1200, margin: "0 auto" }}>
+      {/* ヘッダー */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "rgba(255,255,255,0.92)" }}>
-            配信状態モニター
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 6 }}>
-            reservation: {id}
-          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "rgba(255,255,255,0.92)" }}>配信状態モニター</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 6 }}>reservation: {id}</div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <a href={`/reservations/${id}`} style={{ color: "rgba(255,255,255,0.85)", textDecoration: "none", fontSize: 13 }}>
-            ← 予約詳細へ
-          </a>
+          <a href={`/reservations/${id}`} style={{ color: "rgba(255,255,255,0.85)", textDecoration: "none", fontSize: 13 }}>← 予約詳細へ</a>
           <LogoutButton />
         </div>
       </div>
 
       {err && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            borderRadius: 10,
-            border: "1px solid rgba(255,80,80,0.45)",
-            background: "rgba(255,80,80,0.10)",
-            color: "rgba(255,220,220,0.95)",
-            whiteSpace: "pre-wrap",
-          }}
-        >
+        <div style={{ marginTop: 14, padding: 12, borderRadius: 10, border: "1px solid rgba(255,80,80,0.45)", background: "rgba(255,80,80,0.10)", color: "rgba(255,220,220,0.95)", whiteSpace: "pre-wrap" }}>
           {err}
         </div>
       )}
 
-      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-        <Card title="配信時間（経過）">
-          <div style={{ fontSize: 28, fontWeight: 900 }}>
-            {elapsed == null ? "—" : fmtSeconds(elapsed)}
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
-            startedAt: {startedAt ?? "—"}
-          </div>
-        </Card>
-
-        <Card title="視聴者数（YouTube / Twitch）">
-          <div style={{ fontSize: 14, lineHeight: 1.8 }}>
-            <div>YouTube: <b>{data?.youtube?.viewerCount ?? "—"}</b></div>
-            <div>Twitch: <b>{data?.twitch?.viewerCount ?? "—"}</b></div>
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
-            ※ APIキー未設定の場合は “—”
-          </div>
-        </Card>
-
-        <Card title="配信ステータス（YouTube / Twitch）">
-          <div style={{ fontSize: 14, lineHeight: 1.8 }}>
-            <div>YouTube: <b>{data?.youtube?.live === null ? "不明" : (data?.youtube?.live ? "LIVE" : "OFFLINE")}</b></div>
-            <div>Twitch: <b>{data?.twitch?.live === null ? "不明" : (data?.twitch?.live ? "LIVE" : "OFFLINE")}</b></div>
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
-            {data?.youtube?.note ? `YouTube: ${data.youtube.note}` : ""}
-            {data?.twitch?.note ? ` Twitch: ${data.twitch.note}` : ""}
-          </div>
-        </Card>
+      {/* ── SRTサーバー状態 ── */}
+      <div style={{ marginTop: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
+          📡 SRTサーバー状態
+        </div>
+        <div style={{
+          padding: 14,
+          borderRadius: 12,
+          border: `1px solid ${srt?.serverOk ? "rgba(74,222,128,0.35)" : "rgba(255,80,80,0.35)"}`,
+          background: srt?.serverOk ? "rgba(74,222,128,0.05)" : "rgba(255,80,80,0.05)",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: srt?.serverOk ? "#4ade80" : "#f87171" }}>
+            {srt == null ? "確認中…" : srt.serverOk ? "● ONLINE" : "● OFFLINE"}
+          </span>
+          {srt?.serverOk && (
+            <>
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
+                配信中: <b style={{ color: "#fff" }}>{srt.activePaths}</b> / {cameraCount} カメラ
+              </span>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.50)" }}>
+                最終更新: {srt.fetchedAt ? new Date(srt.fetchedAt).toLocaleTimeString("ja-JP") : "—"}
+              </span>
+            </>
+          )}
+          {srt?.error && (
+            <span style={{ fontSize: 12, color: "#f87171" }}>{srt.error}</span>
+          )}
+        </div>
       </div>
 
+      {/* ── カメラ別SRT状態 ── */}
+      {cameraCount > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
+            📷 カメラ別SRT受信状態
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            gap: 10,
+          }}>
+            {srt!.cameras.map((cam) => (
+              <SrtCameraCard
+                key={cam.path}
+                cam={cam}
+                bps={bpsMap.get(cam.path) ?? null}
+                now={now}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* カメラがない（配信前）場合 */}
+      {srt?.serverOk && cameraCount === 0 && (
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.10)", fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center" }}>
+          現在配信中のカメラはありません（Larix で配信を開始すると表示されます）
+        </div>
+      )}
+
+      {/* ── 既存: 配信統計 ── */}
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
+          📊 配信統計
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+          <Card title="配信時間（経過）">
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
+              {elapsed == null ? "—" : fmtSeconds(elapsed)}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
+              startedAt: {startedAt ?? "—"}
+            </div>
+          </Card>
+          <Card title="視聴者数（YouTube / Twitch）">
+            <div style={{ fontSize: 14, lineHeight: 1.8 }}>
+              <div>YouTube: <b>{data?.youtube?.viewerCount ?? "—"}</b></div>
+              <div>Twitch: <b>{data?.twitch?.viewerCount ?? "—"}</b></div>
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>※ APIキー未設定の場合は "—"</div>
+          </Card>
+          <Card title="配信ステータス（YouTube / Twitch）">
+            <div style={{ fontSize: 14, lineHeight: 1.8 }}>
+              <div>YouTube: <b>{data?.youtube?.live === null ? "不明" : (data?.youtube?.live ? "LIVE" : "OFFLINE")}</b></div>
+              <div>Twitch: <b>{data?.twitch?.live === null ? "不明" : (data?.twitch?.live ? "LIVE" : "OFFLINE")}</b></div>
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
+              {data?.youtube?.note ? `YouTube: ${data.youtube.note}` : ""}
+              {data?.twitch?.note ? ` Twitch: ${data.twitch.note}` : ""}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* ── 既存: ライブプレビュー ── */}
       <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Card title="ライブプレビュー（YouTube）">
           {ytVideoId ? (
@@ -189,17 +342,10 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
               />
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.70)" }}>
-              YouTube配信枠URLが未提出、または動画IDを解析できません。
-            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.70)" }}>YouTube配信枠URLが未提出、または動画IDを解析できません。</div>
           )}
-          {ytUrl && (
-            <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.65)", wordBreak: "break-all" }}>
-              URL: {ytUrl}
-            </div>
-          )}
+          {ytUrl && <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.65)", wordBreak: "break-all" }}>URL: {ytUrl}</div>}
         </Card>
-
         <Card title="ライブプレビュー（Twitch）">
           {twChannel ? (
             <div style={{ position: "relative", paddingTop: "56.25%" }}>
@@ -210,25 +356,19 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
               />
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.70)" }}>
-              TwitchチャンネルURLが未提出、またはチャンネル名を解析できません。
-            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.70)" }}>TwitchチャンネルURLが未提出、またはチャンネル名を解析できません。</div>
           )}
           <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.65)" }}>
-            Twitch埋め込みは <code>parent</code> が必須です（この画面では {twitchParent} を自動指定） [Source](https://dev.twitch.tv/docs/embed/video-and-clips/)
+            Twitch埋め込みは <code>parent</code> が必須です（この画面では {twitchParent} を自動指定）
           </div>
-          {twUrl && (
-            <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.65)", wordBreak: "break-all" }}>
-              URL: {twUrl}
-            </div>
-          )}
+          {twUrl && <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.65)", wordBreak: "break-all" }}>URL: {twUrl}</div>}
         </Card>
       </div>
 
       <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
-        Twitch の視聴者数/開始時刻は Helix Get Streams の <code>viewer_count</code>, <code>started_at</code>, <code>type</code> を利用します [Source](https://dev.twitch.tv/docs/api/reference/#get-streams)
+        Twitch の視聴者数/開始時刻は Helix Get Streams の <code>viewer_count</code>, <code>started_at</code>, <code>type</code> を利用します
         <br />
-        YouTube は Data API の <code>videos.list</code>（<code>liveStreamingDetails</code> など）を利用します [Source](https://developers.google.com/youtube/v3/docs/videos/list)
+        YouTube は Data API の <code>videos.list</code>（<code>liveStreamingDetails</code> など）を利用します
       </div>
     </div>
   );
