@@ -1,0 +1,128 @@
+import { createServerClient } from "@supabase/ssr";
+import LogoutButton from "@/app/components/LogoutButton";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+
+async function createClient() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cs: any[]) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+      },
+    }
+  );
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  confirmed: { label: "確定",       color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+  pending:   { label: "保留中",     color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+  cancelled: { label: "キャンセル", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+};
+
+const PLAN_COLOR: Record<string, string> = {
+  srt_only: "#60a5fa",
+  srt_obs:  "#f59e0b",
+};
+
+export default async function ReservationsPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: reservations } = await supabase
+    .from("reservations")
+    .select("*, plans(name)")
+    .eq("user_id", user.id)
+    .order("start_at", { ascending: false });
+
+  const items = reservations ?? [];
+
+  return (
+    <div style={{ minHeight: "100vh", background: "hsl(var(--background))", color: "hsl(var(--foreground))" }}>
+      <header style={{ background: "#111", borderBottom: "1px solid #222", padding: "0 24px", height: 56, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>🏁</span>
+          <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "0.05em", color: "#e63946" }}>RACE STREAM PRO</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <span style={{ fontSize: 13, color: "#bbb" }}>{user.email}</span>
+          <LogoutButton />
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 800, margin: "0 auto", padding: "32px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>予約一覧</h1>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "hsl(var(--muted-foreground))" }}>{items.length} 件の予約</p>
+          </div>
+          <a href="/reservations/new" style={{ padding: "10px 20px", background: "linear-gradient(135deg, #e63946, #c1121f)", color: "hsl(var(--foreground))", textDecoration: "none", borderRadius: 6, fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            ＋ 新規予約
+          </a>
+        </div>
+
+        {items.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "80px 24px", color: "#333" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🏁</div>
+            <p style={{ fontSize: 16, marginBottom: 8 }}>予約がありません</p>
+            <p style={{ fontSize: 13 }}>「＋ 新規予約」から最初の予約を作成してください</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {items.map((r) => {
+              const s = STATUS_CONFIG[r.status] ?? { label: r.status, color: "#bbb", bg: "#1a1a1a" };
+              const planColor = PLAN_COLOR[r.plan_key] ?? "#9ca3af";
+              const planName = r.plans?.name ?? r.plan_key;
+              const start = new Date(r.start_at);
+              const end = new Date(r.end_at);
+              return (
+                <div key={r.id} style={{ background: "#111", border: "1px solid #222", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s" }}>
+                  <div style={{ height: 2, background: `linear-gradient(90deg, ${planColor}, transparent)` }} />
+                  <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+                    {/* Date block */}
+                    <div style={{ textAlign: "center", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 12px", minWidth: 48, flexShrink: 0 }}>
+                      <div style={{ fontSize: 9, color: "hsl(var(--muted-foreground))", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        {start.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "short" })}
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, color: "hsl(var(--foreground))" }}>{parseInt(start.toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", day: "numeric" }))}</div>
+                      <div style={{ fontSize: 9, color: "hsl(var(--muted-foreground))", marginTop: 1 }}>{start.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", weekday: "short" })}</div>
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: planColor, border: `1px solid ${planColor}44`, borderRadius: 4, padding: "2px 8px" }}>{planName}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: s.color, background: s.bg, border: `1px solid ${s.color}44`, borderRadius: 4, padding: "2px 8px" }}>{s.label}</span>
+                        <span style={{ fontSize: 13, color: "hsl(var(--muted-foreground))" }}>
+                          {start.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" })} – {end.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#e63946", marginLeft: "auto" }}>¥{r.total_price.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <a href={`/reservations/${r.id}`} style={{ padding: "7px 14px", borderRadius: 5, fontSize: 13, fontWeight: 600, textDecoration: "none", color: "#bbb", border: "1px solid #2a2a2a", background: "transparent" }}>詳細</a>
+                      {r.status !== "cancelled" && (
+                        <a href={`/reservations/${r.id}/edit`} style={{ padding: "7px 14px", borderRadius: 5, fontSize: 13, fontWeight: 600, textDecoration: "none", color: "#60a5fa", border: "1px solid #60a5fa44", background: "rgba(96,165,250,0.08)" }}>編集</a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
