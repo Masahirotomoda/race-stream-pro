@@ -38,8 +38,18 @@ type SrtStatus = {
   error?: string;
 };
 
-// ─── ビットレート履歴の型 ────────────────────────────────
 type HistoryPoint = { time: number; value: number };
+
+// ─── GCP Stats 型 ──────────────────────────────────────
+type GcpStats = {
+  instanceName: string;
+  cpu:     { percent: number; cores: number };
+  memory:  { percent: number; usedGb: string; totalGb: string };
+  gpu:     { name: string; percent: number; memUsedMb: number; memTotalMb: number; tempC: number };
+  network: { sentMbps: string; recvMbps: string };
+  disk:    { percent: number; usedGb: string; totalGb: string };
+  timestamp: number;
+};
 
 // ─── ユーティリティ ─────────────────────────────────────
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -87,7 +97,31 @@ function parseTwitchChannel(url: string): string | null {
   } catch { return null; }
 }
 
-const MAX_HISTORY = 60; // 5分（5秒×60）
+const MAX_HISTORY = 60;
+
+// ─── GCP ゲージバー ─────────────────────────────────────
+function GcpGaugeBar({
+  label, percent, color, warning = 80,
+}: { label: string; percent: number; color: string; warning?: number }) {
+  const over = percent >= warning;
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3, color: "rgba(255,255,255,0.75)" }}>
+        <span>{label}</span>
+        <span style={{ color: over ? "#ff4444" : "#aaa", fontWeight: 600 }}>{percent}%</span>
+      </div>
+      <div style={{ height: 6, background: "rgba(255,255,255,0.10)", borderRadius: 3, overflow: "hidden" }}>
+        <div style={{
+          height: "100%",
+          width: `${Math.min(percent, 100)}%`,
+          background: over ? "#ff4444" : color,
+          borderRadius: 3,
+          transition: "width 0.4s ease",
+        }} />
+      </div>
+    </div>
+  );
+}
 
 // ─── SRTカメラカードコンポーネント ──────────────────────
 function SrtCameraCard({ cam, bps, now }: { cam: SrtCamera; bps: number | null; now: number }) {
@@ -152,10 +186,13 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
   const prevBytesRef = useRef<Map<string, { bytes: number; time: number }>>(new Map());
   const [bpsMap, setBpsMap] = useState<Map<string, number>>(new Map());
 
-  // ── グラフ用履歴 state ──────────────────────────────────
-  // { cameraPath: HistoryPoint[] }
+  // グラフ用履歴 state
   const [bitrateHistory, setBitrateHistory] = useState<Record<string, HistoryPoint[]>>({});
   const [pktLossHistory, setPktLossHistory] = useState<Record<string, HistoryPoint[]>>({});
+
+  // GCP state
+  const [gcpStats, setGcpStats] = useState<GcpStats | null>(null);
+  const [gcpErr, setGcpErr] = useState(false);
 
   // 既存 fetch
   async function load() {
@@ -182,10 +219,6 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
       const nowMs = Date.now();
       const newBps = new Map<string, number>();
 
-      // ビットレート計算 & 履歴追記
-      const newBitrateHistory: Record<string, HistoryPoint[]> = {};
-      const newPktLossHistory: Record<string, HistoryPoint[]> = {};
-
       for (const cam of json.cameras ?? []) {
         const prev = prevBytesRef.current.get(cam.path);
         let bpsVal = 0;
@@ -199,13 +232,11 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
         }
         prevBytesRef.current.set(cam.path, { bytes: cam.bytesReceived, time: nowMs });
 
-        // ビットレート履歴（kbps 単位で保存）
         setBitrateHistory((prev) => {
           const arr = [...(prev[cam.path] ?? []), { time: nowMs, value: Math.round(bpsVal / 1000) }];
           return { ...prev, [cam.path]: arr.slice(-MAX_HISTORY) };
         });
 
-        // パケットロス履歴（% 数値で保存）
         const lossVal = cam.pktLostPct != null ? parseFloat(cam.pktLostPct) : 0;
         setPktLossHistory((prev) => {
           const arr = [...(prev[cam.path] ?? []), { time: nowMs, value: lossVal }];
@@ -220,13 +251,34 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
     }
   }
 
+  // GCP fetch（5秒ごと）
+  async function loadGcp() {
+    try {
+      const res = await fetch(`/api/gcp-stats?reservationId=${id}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("gcp failed");
+      const d: GcpStats = await res.json();
+      setGcpStats(d);
+      setGcpErr(false);
+    } catch {
+      setGcpErr(true);
+    }
+  }
+
   useEffect(() => {
     load();
     loadSrt();
+    loadGcp();
     const t1 = window.setInterval(load, 10000);
     const t2 = window.setInterval(() => setNow(Date.now()), 1000);
     const t3 = window.setInterval(loadSrt, 5000);
-    return () => { window.clearInterval(t1); window.clearInterval(t2); window.clearInterval(t3); };
+    const t4 = window.setInterval(loadGcp, 5000);
+    return () => {
+      window.clearInterval(t1);
+      window.clearInterval(t2);
+      window.clearInterval(t3);
+      window.clearInterval(t4);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const ytUrl = data?.youtube?.url ?? null;
@@ -252,11 +304,9 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
 
   const cameraCount = srt?.cameras?.length ?? 0;
 
-  // グラフ用データ整形：全カメラ合算ビットレート
   const totalBitrateHistory = useMemo(() => {
     const allPaths = Object.keys(bitrateHistory);
     if (allPaths.length === 0) return [];
-    // 全カメラの最新履歴の長さを取得
     const maxLen = Math.max(...allPaths.map((p) => bitrateHistory[p]?.length ?? 0));
     const result: HistoryPoint[] = [];
     for (let i = 0; i < maxLen; i++) {
@@ -276,7 +326,6 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
     return result;
   }, [bitrateHistory]);
 
-  // グラフ表示に必要なカメラのリスト
   const cameraPathsWithHistory = Object.keys(bitrateHistory).filter(
     (p) => bitrateHistory[p]?.length > 1
   );
@@ -371,7 +420,6 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
             📈 リアルタイム グラフ（過去5分）
           </div>
 
-          {/* 合算ビットレートグラフ */}
           <div style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: 16, background: "rgba(255,255,255,0.02)", marginBottom: 12 }}>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", marginBottom: 8 }}>
               📶 合算ビットレート（全カメラ）
@@ -383,7 +431,6 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
             />
           </div>
 
-          {/* カメラ別ビットレートグラフ */}
           {cameraPathsWithHistory.length > 1 && (
             <div style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: 16, background: "rgba(255,255,255,0.02)", marginBottom: 12 }}>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", marginBottom: 8 }}>
@@ -409,7 +456,6 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
             </div>
           )}
 
-          {/* パケットロスグラフ */}
           <div style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: 16, background: "rgba(255,255,255,0.02)" }}>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", marginBottom: 8 }}>
               📉 パケットロス率（%）
@@ -432,6 +478,98 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
           </div>
         </div>
       )}
+
+      {/* ── GCPリソースモニター ── */}
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
+          🖥️ GCPリソースモニター
+        </div>
+        <div style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: 16, background: "rgba(255,255,255,0.02)" }}>
+          {/* ヘッダー行 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            {gcpStats?.instanceName && (
+              <span style={{
+                fontSize: 12, padding: "2px 8px", borderRadius: 6,
+                background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)",
+                fontFamily: "monospace",
+              }}>
+                {gcpStats.instanceName}
+              </span>
+            )}
+            <span style={{
+              fontSize: 11, padding: "2px 8px", borderRadius: 10,
+              background: gcpErr ? "rgba(255,80,80,0.2)" : "rgba(74,222,128,0.15)",
+              color: gcpErr ? "#f87171" : "#4ade80",
+            }}>
+              {gcpErr ? "⚠ エラー" : "● ライブ"}
+            </span>
+            {gcpStats && (
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginLeft: "auto" }}>
+                {new Date(gcpStats.timestamp).toLocaleTimeString("ja-JP")} 更新
+              </span>
+            )}
+          </div>
+
+          {gcpStats ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {/* 左列 */}
+              <div>
+                <GcpGaugeBar
+                  label={`CPU (${gcpStats.cpu.cores}コア)`}
+                  percent={gcpStats.cpu.percent}
+                  color="#22d3ee"
+                />
+                <GcpGaugeBar
+                  label={`MEM ${gcpStats.memory.usedGb} / ${gcpStats.memory.totalGb} GB`}
+                  percent={gcpStats.memory.percent}
+                  color="#a855f7"
+                />
+                <GcpGaugeBar
+                  label={`Disk  ${gcpStats.disk.usedGb} / ${gcpStats.disk.totalGb} GB`}
+                  percent={gcpStats.disk.percent}
+                  color="#f97316"
+                  warning={90}
+                />
+              </div>
+              {/* 右列 */}
+              <div>
+                {gcpStats.gpu.percent > 0 ? (
+                  <GcpGaugeBar
+                    label={`GPU  ${gcpStats.gpu.name}`}
+                    percent={gcpStats.gpu.percent}
+                    color="#4ade80"
+                  />
+                ) : (
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>
+                    GPU: データなし（nvidia-smi 未設定）
+                  </div>
+                )}
+                {gcpStats.gpu.tempC > 0 && (
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 8 }}>
+                    🌡 GPU温度:{" "}
+                    <span style={{ color: gcpStats.gpu.tempC > 80 ? "#ff4444" : "#aaa", fontWeight: 700 }}>
+                      {gcpStats.gpu.tempC}°C
+                    </span>
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 2 }}>
+                  <div>⬆ 送信: <b style={{ color: "rgba(255,255,255,0.9)" }}>{gcpStats.network.sentMbps} MB/s</b></div>
+                  <div>⬇ 受信: <b style={{ color: "rgba(255,255,255,0.9)" }}>{gcpStats.network.recvMbps} MB/s</b></div>
+                  {gcpStats.gpu.memTotalMb > 0 && (
+                    <div>GPU VRAM: <b style={{ color: "rgba(255,255,255,0.9)" }}>{gcpStats.gpu.memUsedMb} / {gcpStats.gpu.memTotalMb} MB</b></div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : gcpErr ? (
+            <div style={{ fontSize: 13, color: "#f87171", padding: "8px 0" }}>
+              GCPリソースを取得できません。サーバーがオフラインか、/api/gcp-stats が応答していません。
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", padding: "8px 0" }}>取得中…</div>
+          )}
+        </div>
+      </div>
 
       {/* ── 配信統計 ── */}
       <div style={{ marginTop: 20 }}>
