@@ -1,0 +1,52 @@
+/* Hard reset theme for /reservations/[id]/live
+   Goal: ALWAYS readable even if global theme/overrides are broken.
+*/
+.liveTheme {
+  /* Light tokens */
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+
+  /* Force base */
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+
+  /* Kill common “dim/black screen” causes */
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+
+  min-height: 100vh;
+}
+
+/* Dark mode when <html class="dark"> */
+:global(.dark) .liveTheme {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --muted-foreground: 215 20.2% 75%;
+
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Force all descendants readable by default */
+.liveTheme * {
+  color: inherit !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+/* Preserve “muted” text readability */
+.liveTheme :global(.text-muted-foreground) {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Buttons/links sometimes become black-on-black via component styles */
+.liveTheme a,
+.liveTheme button,
+.liveTheme label,
+.liveTheme input,
+.liveTheme select,
+.liveTheme textarea {
+  color: inherit !important;
+}
