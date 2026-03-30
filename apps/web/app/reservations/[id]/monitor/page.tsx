@@ -588,14 +588,14 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
           <Card title="視聴者数（YouTube / Twitch）">
             <div style={{ fontSize: 14, lineHeight: 1.8 }}>
               <div>YouTube: <b>{data?.youtube?.viewerCount ?? "—"}</b></div>
-              <div>Twitch: <b>{data?.twitch?.viewerCount ?? "—"}</b></div>
+              <div>Twitch: <b style={{ color: "#f59e0b" }}>{data?.twitch?.note === "開発中" ? "🚧 開発中" : (data?.twitch?.viewerCount ?? "—")}</b></div>
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>※ APIキー未設定の場合は "—"</div>
           </Card>
           <Card title="配信ステータス（YouTube / Twitch）">
             <div style={{ fontSize: 14, lineHeight: 1.8 }}>
               <div>YouTube: <b>{data?.youtube?.live === null ? "不明" : (data?.youtube?.live ? "LIVE" : "OFFLINE")}</b></div>
-              <div>Twitch: <b>{data?.twitch?.live === null ? "不明" : (data?.twitch?.live ? "LIVE" : "OFFLINE")}</b></div>
+              <div>Twitch: <b style={{ color: "#f59e0b" }}>{data?.twitch?.note === "開発中" ? "🚧 開発中" : (data?.twitch?.live === null ? "不明" : (data?.twitch?.live ? "LIVE" : "OFFLINE"))}</b></div>
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
               {data?.youtube?.note ? `YouTube: ${data.youtube.note}` : ""}
