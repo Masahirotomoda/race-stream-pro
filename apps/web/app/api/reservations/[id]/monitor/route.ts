@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/app/lib/admin";
 
 export const runtime = "nodejs";
@@ -34,6 +35,47 @@ async function createSupabaseServerClient() {
       },
     }
   );
+}
+
+/**
+ * Cookieベース認証またはBearerトークン認証でユーザーを取得する
+ * - Cookie認証: Supabase SSR createServerClient を使用（getSession → getUser の順で試行）
+ * - Bearer認証: Authorization ヘッダーのアクセストークンを使用
+ */
+async function getAuthenticatedUser() {
+  const headerStore = await headers();
+  const authHeader = headerStore.get("authorization") ?? "";
+
+  // Authorization: Bearer <token> が提供された場合
+  if (authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      const supabaseAdmin = createClient(
+        mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+        mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+        { auth: { persistSession: false } }
+      );
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+      if (user && !error) return { user, source: "bearer" };
+    }
+  }
+
+  // Cookie ベース認証
+  const supabase = await createSupabaseServerClient();
+
+  // getSession() でローカルCookieからセッションを取得（外部APIコールなし）
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    return { user: session.user, supabase, source: "cookie_session" };
+  }
+
+  // getUser() でサーバー検証（外部APIコール、より安全）
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    return { user, supabase, source: "cookie_getuser" };
+  }
+
+  return null;
 }
 
 function parseYouTubeVideoId(input: string | null | undefined): string | null {
@@ -104,10 +146,13 @@ async function getTwitchAppAccessToken() {
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
 
-  const supabase = await createSupabaseServerClient();
+  const authResult = await getAuthenticatedUser();
+  if (!authResult) return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  const { user } = authResult;
+
+  // DBクエリ用のSupabaseクライアント（Cookie認証がある場合はそれを使用、なければ新規作成）
+  const supabase = authResult.supabase ?? await createSupabaseServerClient();
 
   const { data: reservation } = await supabase
     .from("reservations")
@@ -117,8 +162,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!reservation) return NextResponse.json({ ok: false, message: "Not found" }, { status: 404 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const email = session?.user?.email || "";
+  const email = user.email || "";
   const admin = email ? isAdmin(email) : false;
   if (!admin && reservation.user_id !== user.id) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
