@@ -88,10 +88,10 @@ export default async function ReservationsPage() {
                     {/* Date block */}
                     <div style={{ textAlign: "center", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 12px", minWidth: 48, flexShrink: 0 }}>
                       <div style={{ fontSize: 9, color: "hsl(var(--muted-foreground))", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        {start.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "short" })}
+                        {start.toLocaleString("ja-JP", { month: "short" })}
                       </div>
-                      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, color: "hsl(var(--foreground))" }}>{parseInt(start.toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", day: "numeric" }))}</div>
-                      <div style={{ fontSize: 9, color: "hsl(var(--muted-foreground))", marginTop: 1 }}>{start.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", weekday: "short" })}</div>
+                      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, color: "hsl(var(--foreground))" }}>{start.getDate()}</div>
+                      <div style={{ fontSize: 9, color: "hsl(var(--muted-foreground))", marginTop: 1 }}>{start.toLocaleString("ja-JP", { weekday: "short" })}</div>
                     </div>
 
                     {/* Info */}
@@ -103,7 +103,7 @@ export default async function ReservationsPage() {
                         <span style={{ fontSize: 13, fontWeight: 700, color: planColor, border: `1px solid ${planColor}44`, borderRadius: 4, padding: "2px 8px" }}>{planName}</span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: s.color, background: s.bg, border: `1px solid ${s.color}44`, borderRadius: 4, padding: "2px 8px" }}>{s.label}</span>
                         <span style={{ fontSize: 13, color: "hsl(var(--muted-foreground))" }}>
-                          {start.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" })} – {end.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" })}
+                          {start.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })} – {end.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
                         </span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "#e63946", marginLeft: "auto" }}>¥{r.total_price.toLocaleString()}</span>
                       </div>

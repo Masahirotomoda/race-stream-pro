@@ -140,10 +140,10 @@ export default async function AdminReservationsPage() {
                           <span style={{ fontSize: 13, fontWeight: 700, color: planColor }}>{planName}</span>
                         </td>
                         <td style={{ padding: "12px 16px", fontSize: 13, color: "#bbb", whiteSpace: "nowrap" }}>
-                          {new Date(r.start_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          {new Date(r.start_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </td>
                         <td style={{ padding: "12px 16px", fontSize: 13, color: "#bbb", whiteSpace: "nowrap" }}>
-                          {new Date(r.end_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          {new Date(r.end_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </td>
                         <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "#e63946", whiteSpace: "nowrap" }}>
                           ¥{r.total_price.toLocaleString()}

@@ -156,7 +156,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { data: reservation } = await supabase
     .from("reservations")
-    .select("id,user_id,youtube_broadcast_url,twitch_channel_url")
+    .select("id,user_id,youtube_broadcast_url,twitch_channel_url,start_at,end_at,status,plan_key")
     .eq("id", id)
     .maybeSingle();
 
@@ -203,16 +203,41 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // --- Twitch (開発中)
+  // --- Twitch (Helix optional)
   let twitch: any = null;
   if (twitchChannel) {
-    twitch = {
-      channel: twitchChannel,
-      live: null,
-      viewerCount: null,
-      startedAt: null,
-      note: "開発中",
-    };
+    twitch = { channel: twitchChannel, live: null, viewerCount: null, startedAt: null, note: null };
+
+    const clientId = process.env.TWITCH_CLIENT_ID;
+    const appToken = await getTwitchAppAccessToken();
+    if (!clientId || !appToken) {
+      twitch.note = "TWITCH_CLIENT_ID/SECRET not set (viewerCount/live status disabled)";
+    } else {
+      const helix = new URL("https://api.twitch.tv/helix/streams");
+      helix.searchParams.set("user_login", twitchChannel);
+
+      const res = await fetch(helix.toString(), {
+        headers: {
+          "Client-Id": clientId,
+          "Authorization": `Bearer ${appToken}`,
+        },
+        cache: "no-store",
+      });
+
+      if (res.ok) {
+        const json = await res.json() as any;
+        const s = json?.data?.[0] ?? null;
+        if (s) {
+          twitch.live = true;
+          twitch.viewerCount = typeof s.viewer_count === "number" ? s.viewer_count : null;
+          twitch.startedAt = s.started_at ?? null;
+        } else {
+          twitch.live = false;
+        }
+      } else {
+        twitch.note = `Twitch helix/streams failed: ${res.status}`;
+      }
+    }
   }
 
   return NextResponse.json({
@@ -221,6 +246,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       id: reservation.id,
       youtube_broadcast_url: reservation.youtube_broadcast_url ?? null,
       twitch_channel_url: reservation.twitch_channel_url ?? null,
+      start_at: reservation.start_at ?? null,
+      end_at: reservation.end_at ?? null,
+      status: reservation.status ?? null,
+      plan_key: reservation.plan_key ?? null,
     },
     youtube,
     twitch,

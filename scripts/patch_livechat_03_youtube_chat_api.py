@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+import os
+import pathlib
+
+ROOT = pathlib.Path(os.getenv("RSP_ROOT", pathlib.Path.home() / "projects" / "race-stream-pro"))
+
+def write(rel_path: str, content: str):
+    p = ROOT / rel_path
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+    print("✅ wrote:", p)
+
+write(
+  "apps/web/app/api/reservations/[id]/youtube-chat/route.ts",
+r'''import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { isAdmin } from "@/app/lib/admin";
+
+export const runtime = "nodejs";
+
+function mustEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+function safeJsonError(message: string, status = 400, extra?: any) {
+  return NextResponse.json({ ok: false, message, ...extra }, { status });
+}
+
+function parseYouTubeVideoId(input: string | null | undefined): string | null {
+  if (!input) return null;
+  try {
+    const u = new URL(input);
+    const v = u.searchParams.get("v");
+    if (v) return v;
+
+    if (u.hostname === "youtu.be") {
+      const p = u.pathname.split("/").filter(Boolean)[0];
+      return p || null;
+    }
+
+    const parts = u.pathname.split("/").filter(Boolean);
+    const liveIdx = parts.indexOf("live");
+    if (liveIdx >= 0 && liveIdx + 1 < parts.length) return parts[liveIdx + 1];
+
+    const shortsIdx = parts.indexOf("shorts");
+    if (shortsIdx >= 0 && shortsIdx + 1 < parts.length) return parts[shortsIdx + 1];
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshAccessToken(refreshToken: string) {
+  const clientId = mustEnv("GOOGLE_OAUTH_CLIENT_ID");
+  const clientSecret = mustEnv("GOOGLE_OAUTH_CLIENT_SECRET");
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }).toString(),
+  });
+
+  if (!res.ok) throw new Error(`refresh_token_failed`);
+  const json = await res.json() as { access_token: string; expires_in: number; };
+  const expiresAt = new Date(Date.now() + (json.expires_in ?? 0) * 1000).toISOString();
+  return { accessToken: json.access_token, expiresAt };
+}
+
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const url = new URL(req.url);
+  const pageToken = url.searchParams.get("pageToken") || "";
+
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        get(name) { return cookieStore.get(name)?.value; },
+        set(name, value, options) { cookieStore.set({ name, value, ...options }); },
+        remove(name, options) { cookieStore.set({ name, value: "", ...options, maxAge: 0 }); },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return safeJsonError("Unauthorized", 401);
+
+  const { data: reservation, error: rErr } = await supabase
+    .from("reservations")
+    .select("id,user_id,youtube_broadcast_url")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (rErr || !reservation) return safeJsonError("Reservation not found", 404);
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const email = session?.user?.email || "";
+  const admin = email ? isAdmin(email) : false;
+  if (!admin && reservation.user_id !== user.id) return safeJsonError("Forbidden", 403);
+
+  const videoId = parseYouTubeVideoId(reservation.youtube_broadcast_url);
+  if (!videoId) {
+    return NextResponse.json({ ok: true, linked: false, reason: "no_youtube_url", messages: [] });
+  }
+
+  const { data: tok } = await supabase
+    .from("user_oauth_tokens")
+    .select("access_token,refresh_token,expires_at")
+    .eq("user_id", user.id)
+    .eq("provider", "youtube")
+    .maybeSingle();
+
+  if (!tok || (!tok.access_token && !tok.refresh_token)) {
+    return NextResponse.json({ ok: true, linked: false, reason: "not_linked", messages: [] });
+  }
+
+  let accessToken = tok.access_token as string | null;
+  const expiresAt = tok.expires_at ? new Date(tok.expires_at).getTime() : 0;
+  const soon = Date.now() + 60_000;
+
+  if ((!accessToken || expiresAt < soon) && tok.refresh_token) {
+    const refreshed = await refreshAccessToken(tok.refresh_token as string);
+    accessToken = refreshed.accessToken;
+
+    await supabase
+      .from("user_oauth_tokens")
+      .update({ access_token: accessToken, expires_at: refreshed.expiresAt, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .eq("provider", "youtube");
+  }
+
+  if (!accessToken) return NextResponse.json({ ok: true, linked: false, reason: "no_access_token", messages: [] });
+
+  const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${encodeURIComponent(videoId)}`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!vRes.ok) {
+    const txt = await vRes.text();
+    return NextResponse.json({ ok: true, linked: true, live: false, reason: "videos_list_failed", detail: txt.slice(0, 160), messages: [] });
+  }
+
+  const vJson = await vRes.json() as any;
+  const activeLiveChatId = vJson?.items?.[0]?.liveStreamingDetails?.activeLiveChatId || null;
+  if (!activeLiveChatId) {
+    return NextResponse.json({ ok: true, linked: true, live: false, reason: "no_active_live_chat", messages: [] });
+  }
+
+  const lm = new URL("https://www.googleapis.com/youtube/v3/liveChat/messages");
+  lm.searchParams.set("liveChatId", activeLiveChatId);
+  lm.searchParams.set("part", "snippet,authorDetails");
+  lm.searchParams.set("maxResults", "200");
+  if (pageToken) lm.searchParams.set("pageToken", pageToken);
+
+  const mRes = await fetch(lm.toString(), {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!mRes.ok) {
+    const txt = await mRes.text();
+    return NextResponse.json({ ok: true, linked: true, live: true, reason: "live_chat_list_failed", detail: txt.slice(0, 160), messages: [] });
+  }
+
+  const mJson = await mRes.json() as any;
+  const pollingIntervalMillis = mJson?.pollingIntervalMillis ?? 5000;
+  const nextPageToken = mJson?.nextPageToken ?? "";
+
+  const messages = (mJson?.items ?? []).map((it: any) => ({
+    platform: "youtube",
+    id: it?.id ?? "",
+    publishedAt: it?.snippet?.publishedAt ?? "",
+    authorName: it?.authorDetails?.displayName ?? "Unknown",
+    authorPhotoUrl: it?.authorDetails?.profileImageUrl ?? "",
+    text: it?.snippet?.displayMessage ?? "",
+  }));
+
+  return NextResponse.json({
+    ok: true,
+    linked: true,
+    live: true,
+    videoId,
+    pollingIntervalMillis,
+    nextPageToken,
+    messages,
+  });
+}
+'''
+)
