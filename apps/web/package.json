@@ -7,13 +7,12 @@
     "start": "next start -H 0.0.0.0 -p 3000"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.49.8",
     "next": "15.5.12",
+    "@supabase/supabase-js": "^2.49.8",
+    "@supabase/ssr": "^0.6.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "resend": "^4.0.0",
-    "systeminformation": "^5.31.5"
+    "resend": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

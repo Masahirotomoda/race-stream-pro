@@ -62,8 +62,6 @@ export default function EditReservationPage() {
   const [startVal, setStartVal] = useState("");
   const [endVal, setEndVal] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
-  const [youtubeBroadcastUrl, setYoutubeBroadcastUrl] = useState("");
-  const [twitchChannelUrl, setTwitchChannelUrl] = useState("");
   const [obsScene, setObsScene] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -111,8 +109,6 @@ export default function EditReservationPage() {
           start_at: new Date(startVal).toISOString(),
           end_at:   new Date(endVal).toISOString(),
           stream_url: streamUrl.trim() || null,
-          youtube_broadcast_url: youtubeBroadcastUrl.trim() || null,
-          twitch_channel_url: twitchChannelUrl.trim() || null,
           obs_scene:  obsScene.trim() || null,
           notes:      notes.trim() || null,
           total_price: totalPrice,
@@ -217,27 +213,9 @@ export default function EditReservationPage() {
                 </div>
               )}
 
-              {/* YouTube URL */}
+              {/* 配信URL */}
               <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>YouTube 配信URL（任意）</label>
-                <input value={youtubeBroadcastUrl} onChange={e => setYoutubeBroadcastUrl(e.target.value)}
-                  onFocus={() => setFocused("youtube")} onBlur={() => setFocused(null)}
-                  placeholder="https://www.youtube.com/watch?v=xxxxx" style={inputStyle(focused === "youtube")} />
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 4 }}>視聴者数・ライブ状態の取得に使用します</div>
-              </div>
-
-              {/* Twitch URL */}
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Twitch チャンネルURL（任意）</label>
-                <input value={twitchChannelUrl} onChange={e => setTwitchChannelUrl(e.target.value)}
-                  onFocus={() => setFocused("twitch")} onBlur={() => setFocused(null)}
-                  placeholder="https://www.twitch.tv/チャンネル名" style={inputStyle(focused === "twitch")} />
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 4 }}>視聴者数・ライブ状態の取得に使用します</div>
-              </div>
-
-              {/* 配信URL（その他） */}
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>配信先 URL（その他）</label>
+                <label style={{ fontSize: 13, fontWeight: 700, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>配信先 URL</label>
                 <input value={streamUrl} onChange={e => setStreamUrl(e.target.value)}
                   onFocus={() => setFocused("url")} onBlur={() => setFocused(null)}
                   placeholder="rtmp://..." style={inputStyle(focused === "url")} />

@@ -156,7 +156,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { data: reservation } = await supabase
     .from("reservations")
-    .select("id,user_id,youtube_broadcast_url,twitch_channel_url")
+    .select("id,user_id,youtube_broadcast_url,twitch_channel_url,start_at,end_at,status,plan_key")
     .eq("id", id)
     .maybeSingle();
 
@@ -246,6 +246,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       id: reservation.id,
       youtube_broadcast_url: reservation.youtube_broadcast_url ?? null,
       twitch_channel_url: reservation.twitch_channel_url ?? null,
+      start_at: reservation.start_at ?? null,
+      end_at: reservation.end_at ?? null,
+      status: reservation.status ?? null,
+      plan_key: reservation.plan_key ?? null,
     },
     youtube,
     twitch,

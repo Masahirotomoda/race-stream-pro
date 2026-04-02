@@ -37,8 +37,6 @@ export async function PUT(
       start_at: body.start_at,
       end_at: body.end_at,
       stream_url: body.stream_url ?? null,
-      youtube_broadcast_url: body.youtube_broadcast_url ?? null,
-      twitch_channel_url: body.twitch_channel_url ?? null,
       obs_scene: body.obs_scene ?? null,
       notes: body.notes ?? null,
       total_price: body.total_price,

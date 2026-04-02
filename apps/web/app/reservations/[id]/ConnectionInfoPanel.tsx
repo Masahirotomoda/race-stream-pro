@@ -84,7 +84,8 @@ export default function ConnectionInfoPanel({ srt, win, provisionStatus, planKey
     <div>
       {items.map((cam, i) => {
         const t = modes[i] ?? "lmcam";
-	const obsUrl = `srt://${srt!.host}:${srt!.port}?mode=caller&streamid=read:${cam.streamid}:rsp:${cam.passphrase}&latency=200`;
+        const obsUrl = `srt://${srt!.host}:${srt!.port}?streamid=read:${cam.streamid}:rsp:${cam.passphrase}&passphrase=${cam.passphrase}&mode=listener&latency=200000`;
+
         return (
           <div key={i} style={{ marginBottom: 16, padding: "14px 16px", background: "#0a0a0a", borderRadius: 8, border: "1px solid #1e1e1e" }}>
             {/* カメラ番号 & モード切替 */}

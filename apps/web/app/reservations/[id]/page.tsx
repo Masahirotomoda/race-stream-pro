@@ -75,8 +75,8 @@ export default async function ReservationDetailPage({
     ["予約 ID",   <span key="id"    style={{ fontFamily: "monospace", color: "#60a5fa", fontSize: 13 }}>{r.id}</span>],
     ["プラン",    <span key="plan"  style={{ color: planColor, fontWeight: 700 }}>{planName}</span>],
     ["ステータス",<span key="status" style={{ fontSize: 13, fontWeight: 700, color: s.color, background: s.bg, border: `1px solid ${s.color}44`, borderRadius: 20, padding: "3px 12px" }}>{s.label}</span>],
-    ["開始",      startDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })],
-    ["終了",      endDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })],
+    ["開始",      startDate.toLocaleString("ja-JP", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })],
+    ["終了",      endDate.toLocaleString("ja-JP",   { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })],
     ["放映時間",  `${durationMin} 分`],
     ["合計金額",  <span key="price" style={{ fontSize: 16, fontWeight: 700, color: "#e63946" }}>¥{r.total_price.toLocaleString()}<span style={{ fontSize: 13, fontWeight: 400, color: "#aaa", marginLeft: 4 }}>(税込)</span></span>],
     ...(r.stream_url ? [["配信 URL", <a key="url" href={r.stream_url} target="_blank" rel="noreferrer" style={{ color: "#60a5fa", fontSize: 13 }}>{r.stream_url}</a>] as [string, React.ReactNode]] : []),
@@ -113,9 +113,9 @@ export default async function ReservationDetailPage({
               </div>
             </div>
             <div style={{ textAlign: "center", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px 16px", minWidth: 60 }}>
-              <div style={{ fontSize: 13, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>{startDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "short" })}</div>
-              <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, color: "hsl(var(--foreground))" }}>{parseInt(startDate.toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", day: "numeric" }))}</div>
-              <div style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>{startDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", weekday: "short" })}</div>
+              <div style={{ fontSize: 13, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>{startDate.toLocaleString("ja-JP", { month: "short" })}</div>
+              <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, color: "hsl(var(--foreground))" }}>{startDate.getDate()}</div>
+              <div style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>{startDate.toLocaleString("ja-JP", { weekday: "short" })}</div>
             </div>
           </div>
         </div>

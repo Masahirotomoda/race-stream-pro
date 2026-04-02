@@ -26,6 +26,8 @@ type SrtStatus = {
   cameras: SrtCamera[];
   fetchedAt: string;
   error?: string;
+  reservationEnded?: boolean;
+  reservationNotStarted?: boolean;
 };
 
 // ─── ユーティリティ ────────────────────────────────────
@@ -123,6 +125,134 @@ function SrtCameraCard({ cam, bps, now }: { cam: SrtCamera; bps: number | null; 
   );
 }
 
+// ─── OBSメトリクスパネル ──────────────────────────────
+type ObsMetrics = {
+  ok: boolean;
+  serverName?: string;
+  serverStatus?: string;
+  error?: string;
+  notAssigned?: boolean;
+  agentUnreachable?: boolean;
+  reservationEnded?: boolean;
+  metrics?: {
+    collectedAt: string;
+    uptimeSec: number;
+    cpu: { pct: number };
+    memory: { totalGb: number; usedGb: number; pct: number };
+    disk: { totalGb: number; usedGb: number; pct: number };
+    network: { rxKbps: number; txKbps: number };
+    gpu: { available: boolean; gpuPct?: number; vramUsedMb?: number; vramTotalMb?: number };
+    obs: { running: boolean; processCpu?: number; memoryMb?: number };
+  };
+};
+
+function ObsBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 4, height: 6, overflow: "hidden", marginTop: 3 }}>
+      <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: color, borderRadius: 4, transition: "width 0.4s" }} />
+    </div>
+  );
+}
+
+function fmtKbps(kbps: number) {
+  return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbps` : `${kbps.toFixed(0)} kbps`;
+}
+
+function ObsMetricsPanel({ reservationId, planKey }: { reservationId: string; planKey: string | null }) {
+  const [obs, setObs] = useState<ObsMetrics | null>(null);
+
+  useEffect(() => {
+    if (planKey !== "srt_obs") return;
+
+    async function loadObs() {
+      try {
+        const res = await fetch(`/api/system-metrics?reservationId=${reservationId}`, { cache: "no-store" });
+        const json = await res.json();
+        setObs(json);
+      } catch {
+        setObs({ ok: false, error: "fetch failed" });
+      }
+    }
+
+    loadObs();
+    const t = window.setInterval(loadObs, 10000);
+    return () => window.clearInterval(t);
+  }, [reservationId, planKey]);
+
+  if (planKey !== "srt_obs") return null;
+  if (!obs) return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>🖥️ OBSサーバー状態</div>
+      <div style={{ padding: 14, borderRadius: 12, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", fontSize: 13, color: "#888" }}>確認中…</div>
+    </div>
+  );
+
+  const m = obs.metrics;
+  const cpuColor = (m?.cpu.pct ?? 0) > 80 ? "#f87171" : (m?.cpu.pct ?? 0) > 60 ? "#fbbf24" : "#4ade80";
+  const memColor = (m?.memory.pct ?? 0) > 85 ? "#f87171" : (m?.memory.pct ?? 0) > 70 ? "#fbbf24" : "#60a5fa";
+  const diskColor = (m?.disk.pct ?? 0) > 90 ? "#f87171" : (m?.disk.pct ?? 0) > 75 ? "#fbbf24" : "#a78bfa";
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>🖥️ OBSサーバー状態</div>
+      <div style={{
+        padding: 14, borderRadius: 12,
+        border: `1px solid ${obs.ok ? "rgba(96,165,250,0.35)" : "rgba(255,80,80,0.35)"}`,
+        background: obs.ok ? "rgba(96,165,250,0.04)" : "rgba(255,80,80,0.04)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: obs.ok && m ? 14 : 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: obs.ok ? "#60a5fa" : "#f87171" }}>
+            {obs.ok ? `● ${obs.serverName ?? "OBSサーバー"}` : "○ 未接続"}
+          </span>
+          {obs.ok && obs.serverStatus && (
+            <span style={{ fontSize: 12, color: "#888" }}>{obs.serverStatus}</span>
+          )}
+          {!obs.ok && obs.notAssigned && (
+            <span style={{ fontSize: 12, color: "#888" }}>OBSサーバーが割り当て中です（プロビジョニング待ち）</span>
+          )}
+          {!obs.ok && obs.agentUnreachable && (
+            <span style={{ fontSize: 12, color: "#f87171" }}>MetricsAgent に接続できません</span>
+          )}
+          {!obs.ok && obs.error && !obs.notAssigned && !obs.agentUnreachable && (
+            <span style={{ fontSize: 12, color: "#f87171" }}>{obs.error}</span>
+          )}
+        </div>
+        {obs.ok && m && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#888" }}>CPU</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: cpuColor }}>{m.cpu.pct}%</div>
+                <ObsBar pct={m.cpu.pct} color={cpuColor} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888" }}>メモリ</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: memColor }}>{m.memory.pct}%</div>
+                <ObsBar pct={m.memory.pct} color={memColor} />
+                <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{m.memory.usedGb}/{m.memory.totalGb}GB</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888" }}>ディスク</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: diskColor }}>{m.disk.pct}%</div>
+                <ObsBar pct={m.disk.pct} color={diskColor} />
+                <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{m.disk.usedGb}/{m.disk.totalGb}GB</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 12, color: "#888", flexWrap: "wrap" }}>
+              <span>↓ {fmtKbps(m.network.rxKbps)}</span>
+              <span>↑ {fmtKbps(m.network.txKbps)}</span>
+              {m.gpu.available && <span>GPU {m.gpu.gpuPct}% / VRAM {m.gpu.vramUsedMb}MB</span>}
+              <span>OBS: <span style={{ color: m.obs.running ? "#4ade80" : "#f87171", fontWeight: 700 }}>
+                {m.obs.running ? `稼働中 (${m.obs.memoryMb?.toFixed(0)}MB)` : "停止"}
+              </span></span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── メインページ ──────────────────────────────────────
 export default function ReservationMonitorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -208,6 +338,12 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
     return (now - t) / 1000;
   }, [startedAt, now]);
 
+  // 予約期間チェック（monitor APIから取得した end_at を使用）
+  const reservationEndAt = data?.reservation?.end_at ?? null;
+  const reservationStartAt = data?.reservation?.start_at ?? null;
+  const isReservationEnded = reservationEndAt ? now > Date.parse(reservationEndAt) : false;
+  const isReservationNotStarted = reservationStartAt ? now < Date.parse(reservationStartAt) : false;
+
   // カメラ数（SRTリソースから取得、なければsrtのcameras数）
   const cameraCount = srt?.cameras?.length ?? 0;
 
@@ -236,20 +372,57 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
         <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
           📡 SRTサーバー状態
         </div>
+
+        {/* 予約期間終了バナー */}
+        {isReservationEnded && (
+          <div style={{
+            marginBottom: 10,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid rgba(251,191,36,0.45)",
+            background: "rgba(251,191,36,0.08)",
+            fontSize: 13,
+            color: "rgba(251,191,36,0.95)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}>
+            ⚠️ 予約期間が終了しています（終了: {new Date(reservationEndAt!).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}）
+          </div>
+        )}
+
+        {/* 予約開始前バナー */}
+        {isReservationNotStarted && (
+          <div style={{
+            marginBottom: 10,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid rgba(96,165,250,0.45)",
+            background: "rgba(96,165,250,0.08)",
+            fontSize: 13,
+            color: "rgba(147,197,253,0.95)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}>
+            ℹ️ 予約開始前です（開始: {new Date(reservationStartAt!).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}）
+          </div>
+        )}
+
         <div style={{
           padding: 14,
           borderRadius: 12,
-          border: `1px solid ${srt?.serverOk ? "rgba(74,222,128,0.35)" : "rgba(255,80,80,0.35)"}`,
-          background: srt?.serverOk ? "rgba(74,222,128,0.05)" : "rgba(255,80,80,0.05)",
+          border: `1px solid ${isReservationEnded ? "rgba(251,191,36,0.35)" : srt?.serverOk ? "rgba(74,222,128,0.35)" : "rgba(255,80,80,0.35)"}`,
+          background: isReservationEnded ? "rgba(251,191,36,0.05)" : srt?.serverOk ? "rgba(74,222,128,0.05)" : "rgba(255,80,80,0.05)",
           display: "flex",
           alignItems: "center",
           gap: 16,
           flexWrap: "wrap",
         }}>
-          <span style={{ fontSize: 16, fontWeight: 800, color: srt?.serverOk ? "#4ade80" : "#f87171" }}>
-            {srt == null ? "確認中…" : srt.serverOk ? "● ONLINE" : "● OFFLINE"}
+          <span style={{ fontSize: 16, fontWeight: 800, color: isReservationEnded ? "#fbbf24" : srt?.serverOk ? "#4ade80" : "#f87171" }}>
+            {srt == null ? "確認中…" : isReservationEnded ? "○ 期間終了" : srt.serverOk ? "● ONLINE" : "○ OFFLINE"}
           </span>
-          {srt?.serverOk && (
+          {srt?.serverOk && !isReservationEnded && (
             <>
               <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
                 配信中: <b style={{ color: "#fff" }}>{srt.activePaths}</b> / {cameraCount} カメラ
@@ -259,14 +432,14 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
               </span>
             </>
           )}
-          {srt?.error && (
+          {srt?.error && !isReservationEnded && (
             <span style={{ fontSize: 12, color: "#f87171" }}>{srt.error}</span>
           )}
         </div>
       </div>
 
-      {/* ── カメラ別SRT状態 ── */}
-      {cameraCount > 0 && (
+      {/* ── カメラ別SRT状態（期間終了後は非表示） ── */}
+      {!isReservationEnded && cameraCount > 0 && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
             📷 カメラ別SRT受信状態
@@ -288,12 +461,18 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
         </div>
       )}
 
-      {/* カメラがない（配信前）場合 */}
-      {srt?.serverOk && cameraCount === 0 && (
+      {/* カメラがない（配信前 or 期間終了後）場合 */}
+      {!isReservationEnded && srt?.serverOk && cameraCount === 0 && (
         <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.10)", fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center" }}>
           現在配信中のカメラはありません（Larix で配信を開始すると表示されます）
         </div>
       )}
+
+      {/* ── OBSサーバーメトリクス（srt_obsプランのみ） ── */}
+      <ObsMetricsPanel
+        reservationId={id}
+        planKey={data?.reservation?.plan_key ?? null}
+      />
 
       {/* ── 既存: 配信統計 ── */}
       <div style={{ marginTop: 20 }}>

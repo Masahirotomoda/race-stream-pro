@@ -150,6 +150,22 @@ export default function AdminDashboardPage() {
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <a
+            href="/admin/obs-servers"
+            style={{
+              border: "1px solid rgba(96,165,250,0.45)",
+              background: "rgba(96,165,250,0.10)",
+              color: "rgba(147,197,253,0.95)",
+              padding: "10px 14px",
+              borderRadius: 10,
+              cursor: "pointer",
+              textDecoration: "none",
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            🖥️ OBSサーバー管理
+          </a>
           <button
             onClick={load}
             style={{
