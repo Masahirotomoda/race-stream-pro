@@ -15,7 +15,7 @@ async function getAuthUser() {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (cs) => {
+        setAll: (cs: { name: string; value: string; options?: any }[]) => {
           try { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); } catch {}
         },
       },
