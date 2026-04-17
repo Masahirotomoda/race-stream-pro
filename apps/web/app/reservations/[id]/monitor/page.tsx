@@ -180,6 +180,8 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
   const [data, setData] = useState<ApiResp | null>(null);
   const [err, setErr] = useState("");
   const [now, setNow] = useState(Date.now());
+  // 予約期間終了チェック（end_at が現在時刻より過去なら true）
+  const isExpired = data?.end_at ? new Date(data.end_at).getTime() < now : false;
 
   // SRT state
   const [srt, setSrt] = useState<SrtStatus | null>(null);
@@ -358,15 +360,15 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
         <div style={{
           padding: 14,
           borderRadius: 12,
-          border: `1px solid ${srt?.serverOk ? "rgba(74,222,128,0.35)" : "rgba(255,80,80,0.35)"}`,
-          background: srt?.serverOk ? "rgba(74,222,128,0.05)" : "rgba(255,80,80,0.05)",
+          border: `1px solid ${isExpired ? "rgba(150,150,150,0.35)" : srt?.serverOk ? "rgba(74,222,128,0.35)" : "rgba(255,80,80,0.35)"}`,
+          background: isExpired ? "rgba(150,150,150,0.05)" : srt?.serverOk ? "rgba(74,222,128,0.05)" : "rgba(255,80,80,0.05)",
           display: "flex",
           alignItems: "center",
           gap: 16,
           flexWrap: "wrap",
         }}>
-          <span style={{ fontSize: 16, fontWeight: 800, color: srt?.serverOk ? "#4ade80" : "#f87171" }}>
-            {srt == null ? "確認中…" : srt.serverOk ? "● ONLINE" : "● OFFLINE"}
+          <span style={{ fontSize: 16, fontWeight: 800, color: isExpired ? "#9ca3af" : srt?.serverOk ? "#4ade80" : "#f87171" }}>
+            {isExpired ? "● 期間終了" : srt == null ? "確認中…" : srt.serverOk ? "● ONLINE" : "● OFFLINE"}
           </span>
           {srt?.serverOk && (
             <>
@@ -407,7 +409,7 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
         </div>
       )}
 
-      {srt?.serverOk && cameraCount === 0 && (
+      {!isExpired && srt?.serverOk && cameraCount === 0 && (
         <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.10)", fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center" }}>
           現在配信中のカメラはありません（Larix で配信を開始すると表示されます）
         </div>

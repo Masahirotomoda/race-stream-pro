@@ -1,11 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 const MEDIAMTX_API = process.env.MEDIAMTX_API_URL ?? "http://10.146.0.9:9997";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const reservationId = req.nextUrl.searchParams.get("reservationId");
+
+  // 予約期間チェック
+  if (reservationId) {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      const { data: rsv } = await supabase
+        .from("reservations")
+        .select("end_at, status")
+        .eq("id", reservationId)
+        .single();
+      if (rsv) {
+        const now = new Date();
+        const endAt = new Date(rsv.end_at);
+        if (endAt < now) {
+          return NextResponse.json({
+            serverOk: false,
+            expired: true,
+            expiredAt: rsv.end_at,
+            activePaths: 0,
+            totalPaths: 0,
+            cameras: [],
+            fetchedAt: now.toISOString(),
+          });
+        }
+      }
+    } catch (_) {
+      // Supabase エラーは無視してフォールスルー
+    }
+  }
   const suffix = reservationId ? `-${reservationId.slice(0, 8)}` : "";
   try {
     const [pathsRes, srtRes] = await Promise.all([
