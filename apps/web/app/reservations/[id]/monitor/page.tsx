@@ -535,7 +535,7 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
               </div>
               {/* 右列 */}
               <div>
-                {gcpStats.gpu.percent > 0 ? (
+                {gcpStats.gpu.name ? (
                   <GcpGaugeBar
                     label={`GPU  ${gcpStats.gpu.name}`}
                     percent={gcpStats.gpu.percent}
@@ -543,7 +543,7 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
                   />
                 ) : (
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>
-                    GPU: データなし（nvidia-smi 未設定）
+                    GPU: データなし
                   </div>
                 )}
                 {gcpStats.gpu.tempC > 0 && (
