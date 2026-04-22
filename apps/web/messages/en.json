@@ -1,0 +1,150 @@
+{
+  "nav": {
+    "login": "Login",
+    "register": "Pre-register"
+  },
+  "banner": {
+    "text": "Currently: Closed invitation-only beta",
+    "schedule": "Open beta tester recruitment planned for August 2026"
+  },
+  "hero": {
+    "badge": "🏁 Motorsport-Focused / SRT Multi-Camera Streaming",
+    "h1a": "Race streaming,",
+    "h1b": "simpler than ever.",
+    "h1c": "More professional than ever.",
+    "sub": "No dedicated equipment or streaming crew needed. Deliver pro-quality multi-camera live coverage from the circuit using just your smartphone and a browser.",
+    "cta": "Get notified for beta →",
+    "login": "Login if invited",
+    "betaBadge": "● Beta recruitment starts August 2026",
+    "betaSub": "Currently: closed invitation-only test"
+  },
+  "stats": {
+    "cameras": "cameras simultaneously",
+    "latency": "second latency",
+    "uptime": "uptime",
+    "label_cameras": "MAX CAMERAS",
+    "label_latency": "LATENCY",
+    "label_uptime": "UPTIME"
+  },
+  "feature1": {
+    "tag": "Feature 01",
+    "h2a": "Multiple cameras,",
+    "h2b": "one screen.",
+    "body": "Receive up to 8 smartphones\nsimultaneously via SRT protocol.\nVisualize bitrate and packet loss\nin real time.",
+    "items": [
+      "Stream up to 8 cameras simultaneously",
+      "Real-time bitrate graph display",
+      "Continuous packet loss monitoring",
+      "Camera connection status at a glance"
+    ]
+  },
+  "feature2": {
+    "tag": "Feature 02",
+    "h2a": "Reserve it,",
+    "h2b": "leave the rest to us.",
+    "body": "Secure your streaming slot\nwith a few clicks from your browser.\nJust follow the guide from\nsetup to connection.",
+    "items": [
+      "Flexible 15-minute booking increments",
+      "SRT connection info auto-generated",
+      "One-click streaming start via OBS",
+      "Auto cleanup after stream ends"
+    ]
+  },
+  "feature3": {
+    "tag": "Feature 03",
+    "h2a": "From the circuit,",
+    "h2b": "to the world.",
+    "body": "Receive low-latency SRT streams\nfrom anywhere in the country.\nIntegrate with YouTube Live\nto reach a global audience.",
+    "items": [
+      "Forward to YouTube Live or any RTMP destination",
+      "Stable quality even over mobile networks",
+      "Simultaneous multi-location streaming",
+      "Auto-save recordings after the stream"
+    ]
+  },
+  "steps": {
+    "title": "Go live in just 5 steps",
+    "sub": "No complex setup required. From account creation to live streaming in as little as 30 minutes.",
+    "items": [
+      {
+        "step": "01",
+        "title": "Sign up (free)",
+        "desc": "Pre-register with just your email and password. You'll be notified first when the beta begins.",
+        "icon": "👤"
+      },
+      {
+        "step": "02",
+        "title": "Reserve a slot",
+        "desc": "Select your streaming date and time from the calendar. Book in 15-minute increments.",
+        "icon": "📅"
+      },
+      {
+        "step": "03",
+        "title": "Receive SRT info",
+        "desc": "After booking, your SRT connection URL and stream ID are automatically generated.",
+        "icon": "🔗"
+      },
+      {
+        "step": "04",
+        "title": "Start streaming",
+        "desc": "Use any SRT-compatible app to stream from your smartphone. Multiple devices supported.",
+        "icon": "📱"
+      },
+      {
+        "step": "05",
+        "title": "Monitor & finish",
+        "desc": "Watch bitrate in your browser. Auto cleanup after the stream ends.",
+        "icon": "📊"
+      }
+    ]
+  },
+  "pricing": {
+    "title": "Simple pay-as-you-go pricing",
+    "sub": "No setup fees. No monthly charges. Pay only for what you use.",
+    "note": "※ Pricing will apply after the beta period ends",
+    "plans": [
+      {
+        "name": "SRT Server",
+        "price": "¥165",
+        "unit": "/ 15 min",
+        "desc": "SRT receive server only.\nFor those with their own OBS.",
+        "features": [
+          "SRT receive server",
+          "Up to 8 camera inputs",
+          "Bitrate monitor",
+          "No OBS integration"
+        ]
+      },
+      {
+        "name": "SRT + OBS",
+        "price": "¥495",
+        "unit": "/ 15 min",
+        "desc": "SRT server + cloud OBS.\nPro streaming without any hardware.",
+        "features": [
+          "SRT receive server",
+          "Cloud OBS (Windows VM)",
+          "Up to 4 cameras included",
+          "YouTube Live integration"
+        ],
+        "recommended": true
+      }
+    ],
+    "cameraOption": "5th camera and beyond",
+    "cameraPrice": "+ ¥55 / camera / 15 min"
+  },
+  "cta": {
+    "h2a": "Want to be among",
+    "h2b": "the first to try it?",
+    "sub1": "We'll notify you as soon as beta tester",
+    "sub2": "recruitment opens in August 2026.",
+    "button": "Pre-register (free) →",
+    "login": "Login if invited"
+  },
+  "footer": {
+    "copy": "© 2026 RaceStreamPro. All rights reserved.",
+    "links": [
+      "Login",
+      "Contact"
+    ]
+  }
+}

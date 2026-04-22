@@ -1,0 +1,150 @@
+{
+  "nav": {
+    "login": "Connexion",
+    "register": "Pré-inscription"
+  },
+  "banner": {
+    "text": "Actuellement : bêta fermée sur invitation",
+    "schedule": "Recrutement bêta prévu pour août 2026"
+  },
+  "hero": {
+    "badge": "🏁 Spécialisé Motorsport / Streaming multi-caméra SRT",
+    "h1a": "La diffusion de course,",
+    "h1b": "plus simple que jamais.",
+    "h1c": "Plus professionnelle que jamais.",
+    "sub": "Pas besoin d'équipement dédié ni d'équipe de diffusion. Réalisez une retransmission multi-caméra de qualité professionnelle depuis le circuit avec juste votre smartphone et un navigateur.",
+    "cta": "Recevoir la notification bêta →",
+    "login": "Connexion (sur invitation)",
+    "betaBadge": "● Recrutement bêta en août 2026",
+    "betaSub": "Actuellement : test fermé sur invitation"
+  },
+  "stats": {
+    "cameras": "caméras simultanées",
+    "latency": "seconde de latence",
+    "uptime": "de disponibilité",
+    "label_cameras": "CAMÉRAS MAX",
+    "label_latency": "LATENCE",
+    "label_uptime": "DISPONIBILITÉ"
+  },
+  "feature1": {
+    "tag": "Feature 01",
+    "h2a": "Plusieurs caméras,",
+    "h2b": "un seul écran.",
+    "body": "Recevez jusqu'à 8 smartphones\nsimultanément via le protocole SRT.\nVisualisez le débit et la perte\nde paquets en temps réel.",
+    "items": [
+      "Diffusion simultanée de 8 caméras",
+      "Graphique de débit en temps réel",
+      "Surveillance continue de la perte de paquets",
+      "Statut de connexion des caméras en un coup d'œil"
+    ]
+  },
+  "feature2": {
+    "tag": "Feature 02",
+    "h2a": "Réservez,",
+    "h2b": "on s'occupe du reste.",
+    "body": "Réservez votre créneau de diffusion\nen quelques clics depuis votre navigateur.\nSuivez simplement le guide\nde la configuration à la connexion.",
+    "items": [
+      "Réservation flexible par tranches de 15 minutes",
+      "Informations de connexion SRT générées automatiquement",
+      "Démarrage du streaming en un clic via OBS",
+      "Nettoyage automatique après la fin du stream"
+    ]
+  },
+  "feature3": {
+    "tag": "Feature 03",
+    "h2a": "Du circuit",
+    "h2b": "vers le monde.",
+    "body": "Recevez des flux SRT à faible latence\nde partout dans le pays.\nIntégration YouTube Live\npour toucher un public mondial.",
+    "items": [
+      "Transfert vers YouTube Live ou tout RTMP",
+      "Qualité stable même sur réseau mobile",
+      "Diffusion simultanée depuis plusieurs sites",
+      "Sauvegarde automatique des enregistrements"
+    ]
+  },
+  "steps": {
+    "title": "En direct en seulement 5 étapes",
+    "sub": "Aucune configuration complexe. De la création du compte à la diffusion en direct en 30 minutes.",
+    "items": [
+      {
+        "step": "01",
+        "title": "Inscription (gratuite)",
+        "desc": "Pré-inscrivez-vous avec juste votre email et mot de passe. Vous serez informé en priorité au lancement de la bêta.",
+        "icon": "👤"
+      },
+      {
+        "step": "02",
+        "title": "Réserver un créneau",
+        "desc": "Sélectionnez la date et l'heure dans le calendrier. Réservation par tranches de 15 minutes.",
+        "icon": "📅"
+      },
+      {
+        "step": "03",
+        "title": "Recevoir les infos SRT",
+        "desc": "Après la réservation, l'URL et l'ID de flux SRT sont générés automatiquement.",
+        "icon": "🔗"
+      },
+      {
+        "step": "04",
+        "title": "Lancer la diffusion",
+        "desc": "Utilisez une app compatible SRT pour diffuser depuis votre smartphone. Plusieurs appareils supportés.",
+        "icon": "📱"
+      },
+      {
+        "step": "05",
+        "title": "Surveiller & terminer",
+        "desc": "Surveillez le débit dans votre navigateur. Nettoyage automatique après la fin du stream.",
+        "icon": "📊"
+      }
+    ]
+  },
+  "pricing": {
+    "title": "Tarification simple à l'usage",
+    "sub": "Aucun frais d'installation. Aucun abonnement mensuel. Payez uniquement ce que vous utilisez.",
+    "note": "※ Les tarifs s'appliqueront après la fin de la période bêta",
+    "plans": [
+      {
+        "name": "SRT Server",
+        "price": "¥165",
+        "unit": "/ 15 min",
+        "desc": "Serveur de réception SRT uniquement.\nPour ceux qui ont leur propre OBS.",
+        "features": [
+          "Serveur de réception SRT",
+          "Jusqu'à 8 entrées caméra",
+          "Moniteur de débit",
+          "Sans intégration OBS"
+        ]
+      },
+      {
+        "name": "SRT + OBS",
+        "price": "¥495",
+        "unit": "/ 15 min",
+        "desc": "Serveur SRT + OBS cloud.\nDiffusion pro sans matériel.",
+        "features": [
+          "Serveur de réception SRT",
+          "OBS cloud (Windows VM)",
+          "Jusqu'à 4 caméras incluses",
+          "Intégration YouTube Live"
+        ],
+        "recommended": true
+      }
+    ],
+    "cameraOption": "À partir de la 5ème caméra",
+    "cameraPrice": "+ ¥55 / caméra / 15 min"
+  },
+  "cta": {
+    "h2a": "Envie d'être parmi les premiers",
+    "h2b": "à l'essayer ?",
+    "sub1": "Nous vous informerons dès que le recrutement",
+    "sub2": "bêta ouvrira en août 2026.",
+    "button": "Pré-inscription (gratuite) →",
+    "login": "Connexion (sur invitation)"
+  },
+  "footer": {
+    "copy": "© 2026 RaceStreamPro. Tous droits réservés.",
+    "links": [
+      "Connexion",
+      "Contact"
+    ]
+  }
+}
