@@ -123,6 +123,7 @@ export default function NewReservationPage() {
   const [obsScene, setObsScene] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [isBetaApproved, setIsBetaApproved] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
@@ -155,6 +156,17 @@ export default function NewReservationPage() {
       .order("price_per_15m")
       .then(({ data }) => {
         if (data) setPlans(data as any);
+      });
+  }, []);
+
+  // beta_approved チェック
+  useEffect(() => {
+    supabase()
+      .from("profiles")
+      .select("beta_approved")
+      .single()
+      .then(({ data }) => {
+        setIsBetaApproved(data?.beta_approved === true);
       });
   }, []);
 
@@ -261,7 +273,11 @@ export default function NewReservationPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? "予約の作成に失敗しました");
-      router.push("/reservations");
+      if (json?.demo_mode) {
+        router.push(`/reservations/${json.item.id}?demo=1`);
+      } else {
+        router.push("/reservations");
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setLoading(false);
@@ -316,6 +332,30 @@ export default function NewReservationPage() {
         <div style={{ background: "#111", border: "1px solid #222", borderRadius: 12, overflow: "visible" }}>
           <div style={{ height: 3, background: "linear-gradient(90deg, #e63946, #ff6b6b, transparent)" }} />
           <div style={{ padding: "24px 28px 28px" }}>
+            {isBetaApproved === false && (
+              <div style={{
+                background: "rgba(234,179,8,0.08)",
+                border: "1px solid rgba(234,179,8,0.35)",
+                borderRadius: 8,
+                padding: "12px 16px",
+                marginBottom: 20,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+              }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>🔒</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: "#facc15", fontSize: 13, marginBottom: 3 }}>
+                    デモモード（操作確認用）
+                  </div>
+                  <div style={{ fontSize: 12, color: "#a3a3a3", lineHeight: 1.6 }}>
+                    現在は予約フォームの操作感をお試しいただけます。<br />
+                    実際のSRTサーバー・OBS VMは起動しません。<br />
+                    βテスト開始後、抽選で選ばれた方のみ実際の配信が可能になります。
+                  </div>
+                </div>
+              </div>
+            )}
             <h1 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 800 }}>新規予約</h1>
             <div style={{ marginBottom: 20, fontSize: 13, color: "hsl(var(--muted-foreground))" }}>
               利用時間を選んでから開始日時を選択します
@@ -708,7 +748,7 @@ export default function NewReservationPage() {
                   transition: "all 0.2s",
                 }}
               >
-                {loading ? "送信中…" : `予約を作成（pending）`}
+                {loading ? "送信中…" : isBetaApproved === false ? "予約を作成（デモモード）" : "予約を作成"}
               </button>
 
               <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))" }}>

@@ -173,7 +173,10 @@ function SrtCameraCard({ cam, bps, now }: { cam: SrtCamera; bps: number | null; 
 }
 
 // ─── メインページ ────────────────────────────────────────
-export default function ReservationMonitorPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ReservationMonitorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<Record<string, string>> }) {
+  // デモモード判定（URLパラメータ ?demo=1）
+  const sp = await searchParams;
+  const isDemoMode = sp?.demo === "1";
   const { id } = use(params);
 
   // 既存 state
@@ -334,6 +337,34 @@ export default function ReservationMonitorPage({ params }: { params: Promise<{ i
 
   return (
     <div style={{ padding: 18, maxWidth: 1200, margin: "0 auto" }}>
+      {/* ── デモモードバナー ── */}
+      {isDemoMode && (
+        <div style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+          background: "rgba(234,179,8,0.12)",
+          borderBottom: "1px solid rgba(234,179,8,0.4)",
+          padding: "10px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>🔒</span>
+          <div>
+            <span style={{ fontWeight: 700, color: "#facc15", fontSize: 13 }}>
+              デモモード
+            </span>
+            <span style={{ fontSize: 12, color: "#a3a3a3", marginLeft: 8 }}>
+              実際のSRTサーバー・OBS VMは起動していません。操作感の確認用です。
+            </span>
+          </div>
+          <div style={{ marginLeft: "auto", fontSize: 11, color: "#6b7280" }}>
+            βテスト開始後に実際の配信が可能になります
+          </div>
+        </div>
+      )}
+
       {/* ヘッダー */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>

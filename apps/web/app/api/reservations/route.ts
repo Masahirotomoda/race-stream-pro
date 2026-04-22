@@ -65,6 +65,15 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  // ---- beta_approved チェック ----
+  const adminForCheck = createAdminClient();
+  const { data: profile } = await adminForCheck
+    .from("profiles")
+    .select("beta_approved")
+    .eq("id", user.id)
+    .single();
+  const isBetaApproved = profile?.beta_approved === true;
+
   const planKey = body.plan_key;
   const startIso = body.start_at; // UI側でISOにして送る想定
   const endIso = body.end_at;
@@ -120,8 +129,12 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // ---- SRT ID発行（予約時）----
+  // ---- SRT ID発行（予約時・beta_approvedのみ）----
+  if (!isBetaApproved) {
+    console.log("[demo] beta_approved=false: SRT ID発行スキップ (demo mode)");
+  }
   try {
+    if (!isBetaApproved) throw new Error("demo_skip");
     const admin = createAdminClient();
     const maxIds = mustInt("SRT_MAX_IDS_PER_RESERVATION", 5);
     const host = process.env.SRT_PUBLIC_HOST ?? "localhost";
@@ -169,8 +182,9 @@ export async function POST(req: NextRequest) {
     console.error("[srt] issue failed:", e?.message ?? e);
   }
 
-  // ---- メール送信（失敗しても予約作成は成功扱い）----
+  // ---- メール送信（beta_approvedのみ）----
   try {
+    if (!isBetaApproved) throw new Error("demo_skip");
     const { data: plan } = await supabase
       .from("plans")
       .select("name")
@@ -192,7 +206,7 @@ export async function POST(req: NextRequest) {
     console.error("[email] error:", emailErr);
   }
 
-  return NextResponse.json({ item: data }, { status: 201 });
+  return NextResponse.json({ item: data, demo_mode: !isBetaApproved }, { status: 201 });
 }
 
 function max(a: number, b: number) { return a > b ? a : b; }
