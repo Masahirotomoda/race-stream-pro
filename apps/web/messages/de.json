@@ -146,5 +146,10 @@
       "Anmelden",
       "Kontakt"
     ]
+  },
+  "campfire": {
+    "badge": "🔥 Eine Unterstützung unserer CAMPFIRE-Kampagne ist Voraussetzung für die Beta-Auswahl",
+    "link": "CAMPFIRE-Projekt ansehen →",
+    "url": "https://camp-fire.jp/projects/845253/preview"
   }
 }

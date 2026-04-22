@@ -146,5 +146,10 @@
       "ログイン",
       "お問い合わせ"
     ]
+  },
+  "campfire": {
+    "badge": "🔥 βテスター選抜にはCAMPFIREへの支援が必須です",
+    "link": "CAMPFIREプロジェクトを見る →",
+    "url": "https://camp-fire.jp/projects/845253/preview"
   }
 }

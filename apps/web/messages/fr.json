@@ -146,5 +146,10 @@
       "Connexion",
       "Contact"
     ]
+  },
+  "campfire": {
+    "badge": "🔥 Soutenir notre campagne CAMPFIRE est obligatoire pour être sélectionné comme bêta-testeur",
+    "link": "Voir le projet CAMPFIRE →",
+    "url": "https://camp-fire.jp/projects/845253/preview"
   }
 }

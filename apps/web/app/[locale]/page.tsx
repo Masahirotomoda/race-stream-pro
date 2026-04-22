@@ -328,6 +328,40 @@ export default function LandingPage() {
               {t("hero.betaSub")}
             </div>
           </Fade>
+          <Fade y={10} delay={750}>
+            <a
+              href={t("campfire.url")}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 16,
+                padding: "10px 20px",
+                background: "rgba(234,88,12,.12)",
+                border: "1px solid rgba(234,88,12,.4)",
+                borderRadius: 4,
+                color: "#fb923c",
+                fontSize: ".8rem",
+                fontWeight: 700,
+                letterSpacing: ".08em",
+                textDecoration: "none",
+                transition: "background .2s, border-color .2s",
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(234,88,12,.22)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(234,88,12,.7)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(234,88,12,.12)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(234,88,12,.4)";
+              }}
+            >
+              {t("campfire.badge")}
+              <span style={{ opacity: 0.6, fontSize: ".75rem" }}>｜ {t("campfire.link")}</span>
+            </a>
+          </Fade>
         </div>
 
         {/* スクロール矢印 */}
@@ -523,6 +557,29 @@ export default function LandingPage() {
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center bottom, rgba(220,38,38,.1) 0%, transparent 60%)" }} />
         <div style={{ position: "relative" }}>
           <Fade>
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 40,
+              padding: "12px 24px",
+              background: "rgba(234,88,12,.1)",
+              border: "1px solid rgba(234,88,12,.35)",
+              borderRadius: 4,
+            }}>
+              <span style={{ fontSize: "1rem" }}>🔥</span>
+              <span style={{ fontSize: ".82rem", color: "#fb923c", fontWeight: 600, letterSpacing: ".05em", lineHeight: 1.6 }}>
+                {t("campfire.badge").replace("🔥 ", "")}
+              </span>
+              <a
+                href={t("campfire.url")}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#fb923c", fontSize: ".78rem", opacity: 0.7, textDecoration: "underline", flexShrink: 0 }}
+              >
+                {t("campfire.link")}
+              </a>
+            </div>
             <h2 style={{ fontSize: "clamp(2rem,5vw,4rem)", fontWeight: 900, letterSpacing: "-.02em", lineHeight: 1.2, marginBottom: 32 }}>
               {t("cta.h2a")}<br />
               <span style={{ color: "#dc2626" }}>{t("cta.h2b")}</span>
