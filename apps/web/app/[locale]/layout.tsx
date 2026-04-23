@@ -1,6 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages, setRequestLocale } from "next-intl/server";
-import { locales } from "../../i18n";
+import { locales, type Locale } from "../../i18n";
 import type { Metadata } from "next";
 
 export function generateStaticParams() {
@@ -22,13 +21,17 @@ export default async function LocaleLayout({
 }) {
   const { locale } = await params;
 
-  // ← これが必須：リクエストコンテキストにlocaleをセット
-  setRequestLocale(locale);
+  // プラグイン不使用のため直接importでメッセージを読み込む
+  const validLocale: Locale = (locales as readonly string[]).includes(locale)
+    ? (locale as Locale)
+    : "ja";
 
-  const messages = await getMessages();
+  const messages = (
+    await import(`../../messages/${validLocale}.json`)
+  ).default;
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={validLocale} messages={messages}>
       {children}
     </NextIntlClientProvider>
   );
