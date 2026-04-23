@@ -173,9 +173,9 @@ function SrtCameraCard({ cam, bps, now }: { cam: SrtCamera; bps: number | null; 
 }
 
 // ─── メインページ ────────────────────────────────────────
-export default async function ReservationMonitorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<Record<string, string>> }) {
+export default function ReservationMonitorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<Record<string, string>> }) {
   // デモモード判定（URLパラメータ ?demo=1）
-  const sp = await searchParams;
+  const sp = use(searchParams ?? Promise.resolve({} as Record<string, string>));
   const isDemoMode = sp?.demo === "1";
   const { id } = use(params);
 

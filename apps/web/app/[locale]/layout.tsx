@@ -12,6 +12,19 @@ export const metadata: Metadata = {
     "スマートフォン1台でプロ品質のマルチカメラレース配信を実現するクラウドプラットフォーム。",
 };
 
+// 本番ビルドで動的importが失敗しないよう静的importに変更
+import jaMessages from "../../messages/ja.json";
+import enMessages from "../../messages/en.json";
+import deMessages from "../../messages/de.json";
+import frMessages from "../../messages/fr.json";
+
+const messagesMap: Record<Locale, Record<string, unknown>> = {
+  ja: jaMessages,
+  en: enMessages,
+  de: deMessages,
+  fr: frMessages,
+};
+
 export default async function LocaleLayout({
   children,
   params,
@@ -20,15 +33,11 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-
-  // プラグイン不使用のため直接importでメッセージを読み込む
   const validLocale: Locale = (locales as readonly string[]).includes(locale)
     ? (locale as Locale)
     : "ja";
 
-  const messages = (
-    await import(`../../messages/${validLocale}.json`)
-  ).default;
+  const messages = messagesMap[validLocale];
 
   return (
     <NextIntlClientProvider locale={validLocale} messages={messages}>
