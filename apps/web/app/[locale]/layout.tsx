@@ -2,17 +2,6 @@ import { NextIntlClientProvider } from "next-intl";
 import { locales, type Locale } from "../../i18n";
 import type { Metadata } from "next";
 
-export function generateStaticParams() {
-  return locales.map((locale) => ({ locale }));
-}
-
-export const metadata: Metadata = {
-  title: "RaceStreamPro – モータースポーツ特化SRT配信",
-  description:
-    "スマートフォン1台でプロ品質のマルチカメラレース配信を実現するクラウドプラットフォーム。",
-};
-
-// 本番ビルドで動的importが失敗しないよう静的importに変更
 import jaMessages from "../../messages/ja.json";
 import enMessages from "../../messages/en.json";
 import deMessages from "../../messages/de.json";
@@ -23,6 +12,15 @@ const messagesMap: Record<Locale, Record<string, unknown>> = {
   en: enMessages,
   de: deMessages,
   fr: frMessages,
+};
+
+export function generateStaticParams() {
+  return locales.map((locale) => ({ locale }));
+}
+
+export const metadata: Metadata = {
+  title: "RaceStreamPro – モータースポーツ特化SRT配信",
+  description: "スマートフォン1台でプロ品質のマルチカメラレース配信を実現するクラウドプラットフォーム。",
 };
 
 export default async function LocaleLayout({
@@ -36,7 +34,6 @@ export default async function LocaleLayout({
   const validLocale: Locale = (locales as readonly string[]).includes(locale)
     ? (locale as Locale)
     : "ja";
-
   const messages = messagesMap[validLocale];
 
   return (
