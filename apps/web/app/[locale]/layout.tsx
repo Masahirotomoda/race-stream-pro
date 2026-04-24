@@ -1,4 +1,4 @@
-import { NextIntlClientProvider } from "next-intl";
+import { I18nProvider } from "./i18n-provider";
 import { locales, type Locale } from "../../i18n";
 import type { Metadata } from "next";
 
@@ -13,10 +13,6 @@ const messagesMap: Record<Locale, Record<string, unknown>> = {
   de: deMessages,
   fr: frMessages,
 };
-
-export function generateStaticParams() {
-  return locales.map((locale) => ({ locale }));
-}
 
 export const metadata: Metadata = {
   title: "RaceStreamPro – モータースポーツ特化SRT配信",
@@ -37,8 +33,8 @@ export default async function LocaleLayout({
   const messages = messagesMap[validLocale];
 
   return (
-    <NextIntlClientProvider locale={validLocale} messages={messages}>
+    <I18nProvider locale={validLocale} messages={messages}>
       {children}
-    </NextIntlClientProvider>
+    </I18nProvider>
   );
 }

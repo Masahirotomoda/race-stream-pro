@@ -2,7 +2,6 @@
 export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { locales } from "../../i18n";
 
@@ -180,12 +179,12 @@ export default function LandingPage() {
   const t = useTranslations();
   const locale = useLocale();
 
-  const navLinks = (t.raw("footer.links") as string[]);
-  const steps = (t.raw("steps.items") as {step:string;title:string;desc:string;icon:string}[]);
-  const plans = (t.raw("pricing.plans") as {name:string;price:string;unit:string;desc:string;features:string[];recommended?:boolean}[]);
-  const f1items = (t.raw("feature1.items") as string[]);
-  const f2items = (t.raw("feature2.items") as string[]);
-  const f3items = (t.raw("feature3.items") as string[]);
+  const navLinks = (tRaw("footer.links") as string[]);
+  const steps = (tRaw("steps.items") as {step:string;title:string;desc:string;icon:string}[]);
+  const plans = (tRaw("pricing.plans") as {name:string;price:string;unit:string;desc:string;features:string[];recommended?:boolean}[]);
+  const f1items = (tRaw("feature1.items") as string[]);
+  const f2items = (tRaw("feature2.items") as string[]);
+  const f3items = (tRaw("feature3.items") as string[]);
 
   return (
     <div style={{ background: "#080808", color: "#fff", fontFamily: "'Inter','Noto Sans JP',sans-serif", overflowX: "hidden" }}>
@@ -619,7 +618,7 @@ export default function LandingPage() {
         <span style={{ fontSize: ".78rem", color: "rgba(255,255,255,.25)", letterSpacing: ".05em" }}>{t("footer.copy")}</span>
         <div style={{ display: "flex", gap: 24 }}>
           <Link href="/login" style={{ fontSize: ".78rem", color: "rgba(255,255,255,.3)", textDecoration: "none" }}>{navLinks[0]}</Link>
-          <Link href="/contact" style={{ fontSize: ".78rem", color: "rgba(255,255,255,.3)", textDecoration: "none" }}>{navLinks[1]}</Link>
+          <a href="mailto:info@rsp.beql.jp" style={{ fontSize: ".78rem", color: "rgba(255,255,255,.3)", textDecoration: "none" }}>{tRaw("footer.links")?.[1] ?? "Contact"}</a>
         </div>
       </footer>
     </div>
