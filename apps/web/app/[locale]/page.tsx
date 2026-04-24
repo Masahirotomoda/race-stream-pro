@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "./i18n-provider";
 export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -74,7 +75,7 @@ const LANG_META: Record<string, { flag: string; label: string }> = {
 };
 
 function LangSwitcher() {
-  const locale = useLocale();
+  const { locale } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -176,9 +177,7 @@ function CounterCard({ target, unit, label }: { target: number; unit: string; la
    Main
 ══════════════════════════════════════════ */
 export default function LandingPage() {
-  const t = useTranslations();
-  const locale = useLocale();
-
+  const { t, tRaw, locale } = useI18n();
   const navLinks = (tRaw("footer.links") as string[]);
   const steps = (tRaw("steps.items") as {step:string;title:string;desc:string;icon:string}[]);
   const plans = (tRaw("pricing.plans") as {name:string;price:string;unit:string;desc:string;features:string[];recommended?:boolean}[]);
@@ -400,7 +399,7 @@ export default function LandingPage() {
           <div style={{ display: "flex", gap: 80, alignItems: "flex-start", flexWrap: "wrap" }}>
             <Fade delay={0} style={{ flex: "1 1 300px" }}>
               <p style={{ fontSize: "clamp(1.4rem,3vw,2rem)", fontWeight: 300, lineHeight: 1.6, color: "rgba(255,255,255,.9)", letterSpacing: ".02em" }}>
-                {t("feature1.body").split("\n").map((line, i) => <span key={i}>{line}<br /></span>)}
+                {t("feature1.body").split("\n").map((line: string, i: number) => <span key={i}>{line}<br /></span>)}
               </p>
             </Fade>
             <Fade delay={150} style={{ flex: "1 1 280px" }}>
@@ -618,7 +617,7 @@ export default function LandingPage() {
         <span style={{ fontSize: ".78rem", color: "rgba(255,255,255,.25)", letterSpacing: ".05em" }}>{t("footer.copy")}</span>
         <div style={{ display: "flex", gap: 24 }}>
           <Link href="/login" style={{ fontSize: ".78rem", color: "rgba(255,255,255,.3)", textDecoration: "none" }}>{navLinks[0]}</Link>
-          <a href="mailto:info@rsp.beql.jp" style={{ fontSize: ".78rem", color: "rgba(255,255,255,.3)", textDecoration: "none" }}>{tRaw("footer.links")?.[1] ?? "Contact"}</a>
+          <a href="mailto:info@rsp.beql.jp" style={{ fontSize: ".78rem", color: "rgba(255,255,255,.3)", textDecoration: "none" }}>{(tRaw("footer.links") as any)?.[1] ?? "Contact"}</a>
         </div>
       </footer>
     </div>
