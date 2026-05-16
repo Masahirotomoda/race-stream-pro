@@ -74,7 +74,7 @@ jobs:
             --max-instances=5
             --concurrency=80
             --timeout=60
-            --service-account=rsp-web-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+            --service-account=rsp-github-actions@livestreaming-430703.iam.gserviceaccount.com
           env_vars: >-
             NODE_ENV=production,
             VM_CONTROL_URL=https://rsp-vm-control-gowrs6p7wa-an.a.run.app,
