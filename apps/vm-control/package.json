@@ -1,0 +1,13 @@
+{
+  "name": "rsp-vm-control",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "@google-cloud/compute": "^5.0.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "luxon": "^3.5.0"
+  }
+}

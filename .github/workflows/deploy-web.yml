@@ -1,0 +1,85 @@
+name: Deploy Web (Next.js → Cloud Run)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE_NAME: rsp-web
+  IMAGE: ${{ secrets.AR_REPO }}/rsp-web
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Set image tag
+        id: tag
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+          echo "full=${{ env.IMAGE }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "latest=${{ env.IMAGE }}:latest" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/web
+          push: true
+          tags: |
+            ${{ steps.tag.outputs.full }}
+            ${{ steps.tag.outputs.latest }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          cache-from: type=registry,ref=${{ steps.tag.outputs.latest }}
+          cache-to: type=inline
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ steps.tag.outputs.full }}
+          flags: >-
+            --allow-unauthenticated
+            --cpu=1
+            --memory=512Mi
+            --min-instances=0
+            --max-instances=5
+            --concurrency=80
+            --timeout=60
+            --service-account=rsp-web-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          env_vars: >-
+            NODE_ENV=production,
+            VM_CONTROL_URL=https://rsp-vm-control-gowrs6p7wa-an.a.run.app,
+            ADMIN_EMAILS=rspadm@beq.jp
+
+      - name: Show result
+        run: |
+          echo "✅ Deployed: ${{ steps.deploy.outputs.url }}"

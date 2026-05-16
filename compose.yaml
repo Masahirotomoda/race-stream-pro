@@ -1,0 +1,31 @@
+services:
+  web:
+    build:
+      context: ./apps/web
+      target: deps
+    working_dir: /workspace
+    volumes:
+      - ./apps/web:/workspace
+      - web_node_modules:/workspace/node_modules
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    command: sh -c "npm install && npm run dev"
+
+  worker:
+    build:
+      context: ./apps/web
+      target: deps
+    working_dir: /workspace
+    volumes:
+      - ./apps/web:/workspace
+      - web_node_modules:/workspace/node_modules
+    env_file:
+      - .env
+    command: sh -c "npm install && node worker/provisioner.mjs"
+    depends_on:
+      - web
+
+volumes:
+  web_node_modules:
