@@ -45,19 +45,6 @@ jobs:
           echo "full=${{ env.IMAGE }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "latest=${{ env.IMAGE }}:latest" >> $GITHUB_OUTPUT
 
-      - name: Write Dockerfile
-        run: |
-          cat > apps/vm-control/Dockerfile << 'DOCKEREOF'
-          FROM node:22-slim
-          WORKDIR /app
-          COPY package*.json ./
-          RUN npm ci --omit=dev
-          COPY server.js ./
-          ENV NODE_ENV=production
-          EXPOSE 8080
-          CMD ["node", "server.js"]
-          DOCKEREOF
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -85,15 +72,8 @@ jobs:
             --concurrency=5
             --timeout=600
             --service-account=rsp-vm-controller@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-          env_vars: >-
-            TZ=Asia/Tokyo,
-            GCP_PROJECT_ID=${{ env.PROJECT_ID }},
-            GCE_ZONE=asia-northeast1-c,
-            GCE_INSTANCE_NAME=obsserver-win01,
-            GCE_MACHINE_TYPE=n1-standard-4
-          secrets: >-
-            SUPABASE_URL=supabase-url:latest,
-            SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest
+          env_vars: "TZ=Asia/Tokyo,GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCE_ZONE=asia-northeast1-c,GCE_INSTANCE_NAME=obsserver-win01,GCE_MACHINE_TYPE=n1-standard-4"
+          secrets: "SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest"
 
       - name: Show result
-        run: echo "✅ Deployed: ${{ steps.deploy.outputs.url }}"
+        run: echo "✅ Deployed ${{ steps.deploy.outputs.url }}"
