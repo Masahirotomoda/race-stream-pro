@@ -16,8 +16,10 @@ permissions:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: ${{ secrets.GCP_REGION }}
+  AR_REPO: ${{ secrets.AR_REPO }}
   SERVICE_NAME: rsp-vm-control
-  IMAGE: ${{ secrets.AR_REPO }}/rsp-vm-control
+  IMAGE_NAME: rsp-vm-control
+  SA_CONTROLLER: rsp-vm-controller@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
 jobs:
   deploy:
@@ -30,6 +32,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to GCP
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY }}
@@ -42,18 +45,20 @@ jobs:
         id: tag
         run: |
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
-          echo "full=${{ env.IMAGE }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
-          echo "latest=${{ env.IMAGE }}:latest" >> $GITHUB_OUTPUT
+          echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "full_image=${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "latest_image=${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: apps/vm-control
+          file: apps/vm-control/Dockerfile
           push: true
           tags: |
-            ${{ steps.tag.outputs.full }}
-            ${{ steps.tag.outputs.latest }}
-          cache-from: type=registry,ref=${{ steps.tag.outputs.latest }}
+            ${{ steps.tag.outputs.full_image }}
+            ${{ steps.tag.outputs.latest_image }}
+          cache-from: type=registry,ref=${{ steps.tag.outputs.latest_image }}
           cache-to: type=inline
 
       - name: Deploy to Cloud Run
@@ -62,7 +67,7 @@ jobs:
         with:
           service: ${{ env.SERVICE_NAME }}
           region: ${{ env.REGION }}
-          image: ${{ steps.tag.outputs.full }}
+          image: ${{ steps.tag.outputs.full_image }}
           flags: >-
             --no-allow-unauthenticated
             --cpu=1
@@ -71,9 +76,26 @@ jobs:
             --max-instances=3
             --concurrency=5
             --timeout=600
-            --service-account=rsp-vm-controller@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-          env_vars: "TZ=Asia/Tokyo,GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCE_ZONE=asia-northeast1-c,GCE_INSTANCE_NAME=obsserver-win01,GCE_MACHINE_TYPE=n1-standard-4"
-          secrets: "SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest"
+            --service-account=${{ env.SA_CONTROLLER }}
+          env_vars: >-
+            TZ=Asia/Tokyo,
+            GCP_PROJECT_ID=${{ env.PROJECT_ID }},
+            GCE_ZONE=asia-northeast1-c,
+            GCE_INSTANCE_NAME=obsserver-win01,
+            GCE_MACHINE_TYPE=n1-standard-4
+          secrets: >-
+            SUPABASE_URL=supabase-url:latest,
+            SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest
 
-      - name: Show result
-        run: echo "✅ Deployed ${{ steps.deploy.outputs.url }}"
+      - name: Verify deployment
+        run: |
+          echo "✅ Deployed: ${{ steps.deploy.outputs.url }}"
+          echo "  Image: ${{ steps.tag.outputs.full_image }}"
+          TOKEN=$(gcloud auth print-identity-token \
+            --audiences="${{ steps.deploy.outputs.url }}" 2>/dev/null || echo "")
+          if [ -n "$TOKEN" ]; then
+            curl -sS "${{ steps.deploy.outputs.url }}/healthz" \
+              -H "Authorization: Bearer $TOKEN" | python3 -m json.tool || true
+          else
+            echo "  (token 取得スキップ)"
+          fi
