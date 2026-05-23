@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   const results: Array<{
     job_id: string;
     action: string;
-    status: "succeeded" | "error";
+    status: "succeeded" | "failed";
     error?: string;
   }> = [];
 
