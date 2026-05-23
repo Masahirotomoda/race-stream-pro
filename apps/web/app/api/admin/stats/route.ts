@@ -166,7 +166,10 @@ export async function GET() {
     recentReservationsP,
     recentJobsP,
     usersCountP,
-  ]);
+  ]).catch((e: unknown) => { 
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error("Promise.all failed: " + msg);
+  });
 
   const byStatusObj = Object.fromEntries(byStatus);
   const byProvObj = Object.fromEntries(byProv);
