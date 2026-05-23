@@ -78,7 +78,7 @@ jobs:
           env_vars: >-
             NODE_ENV=production,
             VM_CONTROL_URL=https://rsp-vm-control-gowrs6p7wa-an.a.run.app,
-            ADMIN_EMAILS=rspadm@beq.jp
+            ADMIN_EMAILS=rspadm@beql.jp
 
       - name: Show result
         run: |
