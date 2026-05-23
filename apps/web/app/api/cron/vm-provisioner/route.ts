@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, reservation_id, action, status, attempts, last_error, locked_at, locked_by"
     )
-    .in("status", ["queued", "pending"])
+    .in("status", ["queued", "running"])
     .order("created_at", { ascending: true })
     .limit(5);
 
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const { error: lockErr } = await supabase
       .from("provisioning_jobs")
       .update({
-        status: "pending",
+        status: "running",
         locked_at: new Date().toISOString(),
         locked_by: workerId,
         attempts: (job.attempts ?? 0) + 1,
@@ -182,13 +182,13 @@ export async function GET(req: NextRequest) {
       await supabase
         .from("provisioning_jobs")
         .update({
-          status: "error",
+          status: "failed",
           last_error: errMsg,
           locked_by: null,
         })
         .eq("id", job.id);
 
-      results.push({ job_id: job.id, action: job.action, status: "error", error: errMsg });
+      results.push({ job_id: job.id, action: job.action, status: "failed", error: errMsg });
     }
   }
 

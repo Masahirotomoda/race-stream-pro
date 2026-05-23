@@ -120,7 +120,7 @@ function PollingStatus({
 
   const statusMap: Record<string, { icon: string; text: string; color: string }> = {
     queued: { icon: "⏳", text: "VM の起動準備中...", color: "text-yellow-700" },
-    pending: { icon: "🔄", text: "VM を起動しています...", color: "text-blue-700" },
+    running: { icon: "🔄", text: "VM を起動しています...", color: "text-blue-700" },
     error: { icon: "❌", text: "VM の起動に失敗しました", color: "text-red-700" },
   };
 
@@ -139,7 +139,7 @@ function PollingStatus({
           {jobError && (
             <p className="text-xs text-red-600 mt-1">エラー: {jobError}</p>
           )}
-          {jobStatus !== "error" && (
+          {jobStatus !== "failed" && (
             <p className="text-xs text-gray-500 mt-2">
               自動的に更新されます（15 秒ごと）
             </p>
