@@ -199,7 +199,7 @@ http.createServer(async (req, res) => {
         const existing = await getInstance(vmName);
         if (existing) return json(res, 200, { ok: true, action: "already_exists", vmName, status: existing.status, ip: existing.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP ?? null });
       } catch (e) { if (!e.message.includes("404")) throw e; }
-      await updateReservation(reservation_id, { provision_status: "provisioning", provisioned_vm_name: vmName, provisioned_vm_zone: ZONE, provisioned_at: new Date().toISOString() });
+      await updateReservation(reservation_id, { provision_status: "provisioning", gcp_instance_name: vmName, gcp_instance_zone: ZONE });
       try {
         await createSnapshot(snapshotName);
         await createDiskFromSnapshot(diskName, snapshotName);
@@ -220,7 +220,7 @@ http.createServer(async (req, res) => {
       await deleteVm(vmName);
       await deleteDisk(diskName);
       await deleteSnapshot(snapshotName);
-      await updateReservation(reservation_id, { provision_status: "deleted", deprovisioned_at: new Date().toISOString() });
+      await updateReservation(reservation_id, { provision_status: "deleted", gcp_instance_name: null });
       return json(res, 200, { ok: true, action: "deprovisioned", vmName, diskName, snapshotName });
     }
 

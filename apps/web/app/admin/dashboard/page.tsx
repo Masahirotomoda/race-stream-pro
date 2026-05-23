@@ -90,6 +90,23 @@ function StackedBar({ parts }: { parts: Array<{ key: string; label: string; valu
       </div>
       <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.65)" }}>
         total: {total}
+      <Card title="VM 稼働状況">
+        <a
+          href="/admin/vms"
+          style={{
+            display: "block",
+            padding: "12px 16px",
+            background: "rgba(99,102,241,0.15)",
+            border: "1px solid rgba(99,102,241,0.4)",
+            borderRadius: 8,
+            color: "#a5b4fc",
+            textDecoration: "none",
+            fontSize: 14,
+          }}
+        >
+          🖥️ Windows OBS VM のプロビジョニング状況とジョブログを確認 →
+        </a>
+      </Card>
       </div>
     </div>
   );
@@ -309,6 +326,23 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </Card>
+      <Card title="VM 稼働状況">
+        <a
+          href="/admin/vms"
+          style={{
+            display: "block",
+            padding: "12px 16px",
+            background: "rgba(99,102,241,0.15)",
+            border: "1px solid rgba(99,102,241,0.4)",
+            borderRadius: 8,
+            color: "#a5b4fc",
+            textDecoration: "none",
+            fontSize: 14,
+          }}
+        >
+          🖥️ Windows OBS VM のプロビジョニング状況とジョブログを確認 →
+        </a>
+      </Card>
       </div>
     </div>
   );

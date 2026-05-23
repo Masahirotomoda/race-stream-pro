@@ -143,6 +143,7 @@ export default async function ReservationDetailPage({
           </div>
           <div style={{ padding:"18px 28px" }}>
             <ConnectionInfoPanel
+              reservationId={r.id}
               srt={srt}
               win={win}
               provisionStatus={r.provision_status}

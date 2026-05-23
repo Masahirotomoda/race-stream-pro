@@ -1,141 +1,278 @@
 "use client";
 
-import { useState } from "react";
-
-type CamMode = "lmcam" | "larix";
-
-interface SrtItem {
-  srt_url: string;
-  streamid: string;
-  passphrase: string;
-  camera_index: number;
-}
+import { useEffect, useState, useCallback } from "react";
 
 interface SrtData {
-  host: string;
-  port: number;
-  items: SrtItem[];
-  camera_count?: number;
+  host?: string;
+  port?: number;
+  stream_key?: string;
+}
+
+interface WinData {
+  rdp_host?: string;
+  rdp_port?: number;
+  username?: string;
+  password?: string;
+}
+
+interface ProvisionStatusResponse {
+  provision_status: string | null;
+  plan_key: string;
+  job_status: string | null;
+  job_error: string | null;
+  job_attempts: number;
+  rdp_host: string | null;
+  rdp_port: number | null;
+  username: string | null;
 }
 
 interface Props {
-  srt?: SrtData | null;
-  win?: { ip?: string; username?: string; password?: string } | null;
-  provisionStatus?: string;
-  planKey?: string;
+  reservationId: string;
+  srt: SrtData | null;
+  win: WinData | null;
+  provisionStatus: string | null;
+  planKey: string;
 }
 
-function CopyBtn({ value }: { value: string }) {
+function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <button
-      onClick={() => {
-        navigator.clipboard.writeText(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }}
-      style={{
-        marginLeft: 8, padding: "2px 10px", fontSize: 11,
-        background: copied ? "#16a34a" : "#2a2a2a",
-        color: copied ? "#fff" : "#aaa",
-        border: `1px solid ${copied ? "#16a34a" : "#444"}`,
-        borderRadius: 4, cursor: "pointer", flexShrink: 0,
-      }}
+      onClick={handleCopy}
+      className="ml-2 px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
     >
-      {copied ? "✓ コピー済" : "コピー"}
+      {copied ? "✅ コピー済" : label ?? "コピー"}
     </button>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function RdpInstructions({
+  rdpHost,
+  rdpPort,
+  username,
+}: {
+  rdpHost: string;
+  rdpPort: number;
+  username: string;
+}) {
   return (
-    <div style={{ display: "flex", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #1a1a1a" }}>
-      <span style={{ width: 140, fontSize: 11, color: "#666", flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-        {label}
-      </span>
-      <span style={{ fontFamily: "monospace", fontSize: 13, color: "#ddd", wordBreak: "break-all", flex: 1 }}>
-        {value}
-      </span>
-      <CopyBtn value={value} />
+    <div className="space-y-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="font-semibold text-blue-900 mb-3">RDP 接続情報</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center">
+            <span className="w-32 text-gray-600">ホスト</span>
+            <code className="font-mono bg-white px-2 py-1 rounded border">
+              {rdpHost}:{rdpPort}
+            </code>
+            <CopyButton text={`${rdpHost}:${rdpPort}`} label="コピー" />
+          </div>
+          <div className="flex items-center">
+            <span className="w-32 text-gray-600">ユーザー名</span>
+            <code className="font-mono bg-white px-2 py-1 rounded border">{username}</code>
+            <CopyButton text={username} />
+          </div>
+          <div className="flex items-center">
+            <span className="w-32 text-gray-600">パスワード</span>
+            <span className="text-gray-500 text-xs">
+              ※ 予約確認メールに記載されています
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="font-medium text-gray-700 mb-2 text-sm">接続手順</h4>
+        <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+          <li>Windows の「スタート」→「リモートデスクトップ接続」を開く</li>
+          <li>
+            コンピューター欄に{" "}
+            <code className="font-mono bg-white px-1 rounded">
+              {rdpHost}:{rdpPort}
+            </code>{" "}
+            を入力
+          </li>
+          <li>「接続」をクリックし、ユーザー名とパスワードを入力</li>
+          <li>証明書の警告が出た場合は「はい」をクリック</li>
+        </ol>
+      </div>
     </div>
   );
 }
 
-export default function ConnectionInfoPanel({ srt, win, provisionStatus, planKey }: Props) {
-  const items: SrtItem[] = srt?.items ?? [];
+function PollingStatus({
+  jobStatus,
+  jobError,
+  jobAttempts,
+}: {
+  jobStatus: string | null;
+  jobError: string | null;
+  jobAttempts: number;
+}) {
+  if (jobStatus === "succeeded") return null;
 
-  const [modes, setModes] = useState<Record<number, CamMode>>(
-    Object.fromEntries(items.map((_, i) => [i, "lmcam" as CamMode]))
-  );
-  const setMode = (i: number, m: CamMode) =>
-    setModes(prev => ({ ...prev, [i]: m }));
+  const statusMap: Record<string, { icon: string; text: string; color: string }> = {
+    queued: { icon: "⏳", text: "VM の起動準備中...", color: "text-yellow-700" },
+    pending: { icon: "🔄", text: "VM を起動しています...", color: "text-blue-700" },
+    error: { icon: "❌", text: "VM の起動に失敗しました", color: "text-red-700" },
+  };
 
-  if (items.length === 0 && !win?.ip) {
-    return (
-      <div style={{ padding: "16px 0", color: "#555", fontSize: 13 }}>
-        {provisionStatus === "pending"
-          ? "⏳ プロビジョニング中... しばらくお待ちください"
-          : "接続情報はまだ準備されていません"}
-      </div>
-    );
-  }
+  const info = jobStatus ? statusMap[jobStatus] : null;
 
   return (
-    <div>
-      {items.map((cam, i) => {
-        const t = modes[i] ?? "lmcam";
-	const obsUrl = `srt://${srt!.host}:${srt!.port}?mode=caller&streamid=read:${cam.streamid}:rsp:${cam.passphrase}&latency=200`;
-        return (
-          <div key={i} style={{ marginBottom: 16, padding: "14px 16px", background: "#0a0a0a", borderRadius: 8, border: "1px solid #1e1e1e" }}>
-            {/* カメラ番号 & モード切替 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 10 }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: "#bbb" }}>📷 カメラ {cam.camera_index}</span>
-              {(["lmcam", "larix"] as CamMode[]).map(opt => (
-                <label key={opt} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: t === opt ? "#60a5fa" : "#666", cursor: "pointer", fontWeight: t === opt ? 700 : 400 }}>
-                  <input type="radio" name={`cam-${i}`} checked={t === opt} onChange={() => setMode(i, opt)} style={{ accentColor: "#60a5fa" }} />
-                  {opt === "lmcam" ? "LM-CAM" : "Larix"}
-                </label>
-              ))}
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+      {info ? (
+        <>
+          <p className={`font-medium ${info.color}`}>
+            {info.icon} {info.text}
+          </p>
+          {jobAttempts > 0 && (
+            <p className="text-xs text-gray-500 mt-1">試行回数: {jobAttempts}</p>
+          )}
+          {jobError && (
+            <p className="text-xs text-red-600 mt-1">エラー: {jobError}</p>
+          )}
+          {jobStatus !== "error" && (
+            <p className="text-xs text-gray-500 mt-2">
+              自動的に更新されます（15 秒ごと）
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-gray-600 text-sm">⏳ VM の状態を確認中...</p>
+      )}
+    </div>
+  );
+}
+
+export default function ConnectionInfoPanel({
+  reservationId,
+  srt,
+  win,
+  provisionStatus,
+  planKey,
+}: Props) {
+  const isObsPlan = planKey === "windows_obs";
+
+  const [polledStatus, setPolledStatus] = useState<ProvisionStatusResponse | null>(null);
+  const [pollingError, setPollingError] = useState<string | null>(null);
+
+  const poll = useCallback(async () => {
+    if (!isObsPlan) return;
+
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}/provision-status`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: ProvisionStatusResponse = await res.json();
+      setPolledStatus(data);
+      setPollingError(null);
+    } catch (e) {
+      setPollingError(e instanceof Error ? e.message : "取得エラー");
+    }
+  }, [reservationId, isObsPlan]);
+
+  useEffect(() => {
+    if (!isObsPlan) return;
+    poll();
+    const id = setInterval(poll, 15_000);
+    return () => clearInterval(id);
+  }, [poll, isObsPlan]);
+
+  // RDP 接続情報（ポーリング結果またはサーバーコンポーネントから渡された初期値）
+  const rdpHost = polledStatus?.rdp_host ?? win?.rdp_host ?? null;
+  const rdpPort = polledStatus?.rdp_port ?? win?.rdp_port ?? 3389;
+  const username = polledStatus?.username ?? win?.username ?? "obsadmin";
+  const currentProvisionStatus = polledStatus?.provision_status ?? provisionStatus;
+  const jobStatus = polledStatus?.job_status ?? null;
+  const jobError = polledStatus?.job_error ?? null;
+  const jobAttempts = polledStatus?.job_attempts ?? 0;
+
+  return (
+    <div className="space-y-6">
+      {/* SRT 接続情報（OBS 以外のプランも表示） */}
+      {srt && (
+        <section>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">SRT 接続情報</h2>
+          <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+            <div className="flex items-center">
+              <span className="w-32 text-gray-600">ホスト</span>
+              <code className="font-mono">{srt.host}</code>
+              {srt.host && <CopyButton text={srt.host} />}
             </div>
-
-            {t === "lmcam" ? (
-              <>
-                <Row label="HOST"       value={srt!.host} />
-                <Row label="PORT"       value={String(srt!.port)} />
-                <Row label="STREAM ID"  value={`publish:${cam.streamid}:rsp:${cam.passphrase}`} />
-                <Row label="PASSPHRASE" value={cam.passphrase} />
-                <Row label="MODE"       value="caller" />
-              </>
-            ) : (
-              <>
-	        <Row label="URL"        value={`srt://${srt!.host}:${srt!.port}`} />
-	        <Row label="SRT MODE"   value="Caller" />
-	        <Row label="LATENCY"    value="200" />
-	        <Row label="PASSPHRASE" value="" />
-	        <Row label="STREAM ID"  value={`publish:${cam.streamid}:rsp:${cam.passphrase}`} />
-               </>
-            )}
-
-            {planKey === "srt_obs" && (
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  🎬 OBS 入力設定
-                </div>
-                <Row label="入力形式" value="mpegts" />
-                <Row label="入力URL"  value={obsUrl} />
+            <div className="flex items-center">
+              <span className="w-32 text-gray-600">ポート</span>
+              <code className="font-mono">{srt.port}</code>
+            </div>
+            {srt.stream_key && (
+              <div className="flex items-center">
+                <span className="w-32 text-gray-600">ストリームキー</span>
+                <code className="font-mono text-xs bg-white px-2 py-1 rounded border">
+                  {srt.stream_key}
+                </code>
+                <CopyButton text={srt.stream_key} />
               </div>
             )}
           </div>
-        );
-      })}
+        </section>
+      )}
 
-      {win?.ip && (
-        <div style={{ padding: "14px 16px", background: "#0a0a0a", borderRadius: 8, border: "1px solid #1e1e1e" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#bbb", marginBottom: 10 }}>🖥️ Windows RDP</div>
-          {win.ip       && <Row label="IP"         value={win.ip} />}
-          {win.username && <Row label="ユーザー名" value={win.username} />}
-          {win.password && <Row label="パスワード" value={win.password} />}
-        </div>
+      {/* Windows OBS VM 接続情報 */}
+      {isObsPlan && (
+        <section>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Windows OBS VM 接続情報</h2>
+
+          {pollingError && (
+            <p className="text-red-500 text-sm mb-3">⚠️ 状態取得エラー: {pollingError}</p>
+          )}
+
+          {/* VM が準備できていない場合 */}
+          {(!rdpHost ||
+            currentProvisionStatus === "provisioning" ||
+            currentProvisionStatus === null) &&
+            jobStatus !== null && (
+              <PollingStatus
+                jobStatus={jobStatus}
+                jobError={jobError}
+                jobAttempts={jobAttempts}
+              />
+            )}
+
+          {/* VM 準備完了 → RDP 接続情報を表示 */}
+          {rdpHost && currentProvisionStatus === "provisioned" && (
+            <RdpInstructions
+              rdpHost={rdpHost}
+              rdpPort={rdpPort}
+              username={username}
+            />
+          )}
+
+          {/* 予約済みだが VM がまだ割り当てられていない */}
+          {!rdpHost &&
+            currentProvisionStatus !== "provisioned" &&
+            jobStatus === null && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-gray-600 text-sm">
+                  ⏳ VM はまだ割り当てられていません。予約開始時刻に自動的に起動されます。
+                </p>
+              </div>
+            )}
+
+          {/* デプロビジョン済み */}
+          {currentProvisionStatus === "deprovisioned" && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <p className="text-gray-600 text-sm">
+                ✅ 予約終了につき VM は削除されました。
+              </p>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
