@@ -47,6 +47,7 @@ async function countAllUsers(admin: any, maxUsers = 5000) {
 }
 
 export async function GET() {
+  try {
   // 認証（Cookieベース）
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -214,4 +215,9 @@ export async function GET() {
       jobs: recentJobs.data ?? [],
     },
   });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[stats] unhandled error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
