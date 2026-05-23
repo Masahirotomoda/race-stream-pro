@@ -49,7 +49,16 @@ export async function GET(req: NextRequest) {
     const srtData = srtRes.ok ? await srtRes.json() : { items: [] };
     const allPaths = pathsData.items ?? [];
     const allSrtConns = srtData.items ?? [];
-    const camPaths = suffix ? allPaths.filter((p: any) => p.name.endsWith(suffix)) : allPaths;
+    let camPaths = allPaths;
+    if (suffix) {
+      const suffixed = allPaths.filter((p: any) => p.name.endsWith(suffix));
+      if (suffixed.length > 0) {
+        camPaths = suffixed;
+      } else {
+        const camOnly = allPaths.filter((p: any) => /^cam\d+/.test(p.name));
+        camPaths = camOnly.length > 0 ? camOnly : allPaths;
+      }
+    }
     const srtByPath = new Map<string, any>();
     for (const conn of allSrtConns) {
       if (conn.state === "publish") srtByPath.set(conn.path, conn);
