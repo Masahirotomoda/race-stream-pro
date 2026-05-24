@@ -110,6 +110,7 @@ export function BitrateChart({
     colors: [color],
     xaxis: {
       type: "datetime",
+      datetimeUTC: false,
       labels: {
         style: { colors: "rgba(255,255,255,0.45)", fontSize: "11px" },
         datetimeFormatter: { minute: "HH:mm", second: "HH:mm:ss" },
@@ -183,6 +184,7 @@ export function PacketLossChart({
     colors: ["#f87171"],
     xaxis: {
       type: "datetime",
+      datetimeUTC: false,
       labels: {
         style: { colors: "rgba(255,255,255,0.45)", fontSize: "11px" },
         datetimeFormatter: { minute: "HH:mm", second: "HH:mm:ss" },
@@ -247,6 +249,7 @@ export function BitrateSummaryChart({
     colors: CAMERA_COLORS,
     xaxis: {
       type: "datetime",
+      datetimeUTC: false,
       labels: {
         style: { colors: "rgba(255,255,255,0.45)", fontSize: "11px" },
         datetimeFormatter: { minute: "HH:mm", second: "HH:mm:ss" },
