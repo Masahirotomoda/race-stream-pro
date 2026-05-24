@@ -2,10 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react";
 
+// ─── 型定義 ────────────────────────────────────────────────────
+interface SrtItem {
+  streamid:   string;
+  passphrase: string;
+  path?:      string;
+}
+
 interface SrtData {
-  host?: string;
-  port?: number;
-  stream_key?: string;
+  host?:          string;
+  port?:          number;
+  camera_count?:  number;
+  items?:         SrtItem[];
+  // 旧形式フォールバック
+  stream_key?:    string;
 }
 
 interface WinData {
@@ -17,148 +27,367 @@ interface WinData {
 
 interface ProvisionStatusResponse {
   provision_status: string | null;
-  plan_key: string;
-  job_status: string | null;
-  job_error: string | null;
-  job_attempts: number;
-  rdp_host: string | null;
-  rdp_port: number | null;
-  username: string | null;
+  plan_key:         string;
+  job_status:       string | null;
+  job_error:        string | null;
+  job_attempts:     number;
+  rdp_host:         string | null;
+  rdp_port:         number | null;
+  username:         string | null;
 }
 
 interface Props {
-  reservationId: string;
-  srt: SrtData | null;
-  win: WinData | null;
+  reservationId:   string;
+  srt:             SrtData | null;
+  win:             WinData | null;
   provisionStatus: string | null;
-  planKey: string;
+  planKey:         string;
 }
 
-function CopyButton({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
+// ─── カメラカラー ───────────────────────────────────────────────
+const CAM_COLORS = ["#e63946", "#2dc653", "#4895ef", "#f4a261", "#a78bfa", "#fb7185"];
 
+// ─── CopyButton ─────────────────────────────────────────────────
+function CopyButton({ text, label, small }: { text: string; label?: string; small?: boolean }) {
+  const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
   return (
     <button
       onClick={handleCopy}
-      className="ml-2 px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+      style={{
+        marginLeft: 6,
+        padding: small ? "2px 8px" : "3px 10px",
+        fontSize: small ? 11 : 12,
+        background: copied ? "rgba(45,198,83,0.15)" : "rgba(255,255,255,0.07)",
+        border: `1px solid ${copied ? "rgba(45,198,83,0.4)" : "rgba(255,255,255,0.15)"}`,
+        borderRadius: 4,
+        color: copied ? "#2dc653" : "#aaa",
+        cursor: "pointer",
+        transition: "all 0.2s",
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
     >
-      {copied ? "✅ コピー済" : label ?? "コピー"}
+      {copied ? "✓ コピー済" : label ?? "コピー"}
     </button>
   );
 }
 
-function RdpInstructions({
-  rdpHost,
-  rdpPort,
-  username,
+// ─── SRT カメラカード ───────────────────────────────────────────
+function SrtCameraCard({
+  index,
+  item,
+  host,
+  port,
 }: {
-  rdpHost: string;
-  rdpPort: number;
-  username: string;
+  index:  number;
+  item:   SrtItem;
+  host:   string;
+  port:   number;
 }) {
+  const color     = CAM_COLORS[index % CAM_COLORS.length];
+  const streamId  = `publish:${item.streamid}:rsp:${item.passphrase}`;
+  const srtUrl    = `srt://${host}:${port}?streamid=${encodeURIComponent(streamId)}&latency=200000`;
+
   return (
-    <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-3">RDP 接続情報</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center">
-            <span className="w-32 text-gray-600">ホスト</span>
-            <code className="font-mono bg-white px-2 py-1 rounded border">
-              {rdpHost}:{rdpPort}
-            </code>
-            <CopyButton text={`${rdpHost}:${rdpPort}`} label="コピー" />
-          </div>
-          <div className="flex items-center">
-            <span className="w-32 text-gray-600">ユーザー名</span>
-            <code className="font-mono bg-white px-2 py-1 rounded border">{username}</code>
-            <CopyButton text={username} />
-          </div>
-          <div className="flex items-center">
-            <span className="w-32 text-gray-600">パスワード</span>
-            <span className="text-gray-500 text-xs">
-              ※ 予約確認メールに記載されています
-            </span>
-          </div>
+    <div style={{
+      background: "#1a1a24",
+      border: `1px solid ${color}44`,
+      borderRadius: 10,
+      overflow: "hidden",
+    }}>
+      {/* ヘッダー */}
+      <div style={{
+        background: `${color}18`,
+        borderBottom: `2px solid ${color}55`,
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+      }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 8,
+          background: color, color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontWeight: 700, fontSize: 13, lineHeight: 1.2, textAlign: "center",
+          flexShrink: 0,
+        }}>
+          CAM<br />{index + 1}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Camera {index + 1}</div>
+          <div style={{ fontSize: 11, color: "#888", fontFamily: "monospace" }}>{item.streamid}</div>
         </div>
       </div>
 
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h4 className="font-medium text-gray-700 mb-2 text-sm">接続手順</h4>
-        <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
-          <li>Windows の「スタート」→「リモートデスクトップ接続」を開く</li>
-          <li>
-            コンピューター欄に{" "}
-            <code className="font-mono bg-white px-1 rounded">
-              {rdpHost}:{rdpPort}
-            </code>{" "}
-            を入力
-          </li>
+      {/* 情報行 */}
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {[
+          { label: "ホスト",       value: host,             copy: host },
+          { label: "ポート",       value: String(port),     copy: String(port) },
+          { label: "SRT Mode",    value: "Caller",          copy: null },
+          { label: "Latency",     value: "200 ms",          copy: null },
+          { label: "パスフレーズ", value: item.passphrase,  copy: item.passphrase },
+        ].map(({ label, value, copy }) => (
+          <div key={label} style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#888" }}>{label}</span>
+            <div style={{
+              display: "flex", alignItems: "center",
+              background: "#0f0f18", border: "1px solid #2e2e40",
+              borderRadius: 5, padding: "5px 10px",
+              fontFamily: "monospace", fontSize: 12, fontWeight: 600,
+              justifyContent: "space-between",
+            }}>
+              <span>{value}</span>
+              {copy && <CopyButton text={copy} small />}
+            </div>
+          </div>
+        ))}
+
+        {/* Stream ID */}
+        <div style={{ marginTop: 4 }}>
+          <div style={{
+            fontSize: 11, color: "#888", marginBottom: 5,
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            Stream ID
+            <span style={{
+              background: `${color}22`, color, border: `1px solid ${color}44`,
+              padding: "1px 6px", borderRadius: 3, fontSize: 10,
+            }}>Larix / LM-Cam 貼り付け用</span>
+          </div>
+          <div style={{
+            background: "#0a0a14", border: "1px solid #2e2e40", borderRadius: 6,
+            padding: "8px 12px",
+          }}>
+            <div style={{
+              fontFamily: "monospace", fontSize: 12, fontWeight: 600,
+              color: "#a8d8ea", wordBreak: "break-all", lineHeight: 1.5,
+            }}>
+              {streamId}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+              <CopyButton text={streamId} label="Stream ID をコピー" />
+            </div>
+          </div>
+        </div>
+
+        {/* SRT URL */}
+        <div>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>SRT URL（URL形式）</div>
+          <div style={{
+            background: "#0a0a14", border: "1px solid #2e2e40", borderRadius: 5,
+            padding: "6px 10px", display: "flex", alignItems: "center",
+            justifyContent: "space-between", gap: 8,
+          }}>
+            <span style={{
+              fontFamily: "monospace", fontSize: 11, color: "#6b9fc8",
+              wordBreak: "break-all", lineHeight: 1.4,
+            }}>
+              srt://{host}:{port}?streamid=publish:{item.streamid}:rsp:…
+            </span>
+            <CopyButton text={srtUrl} label="コピー" small />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 共通接続情報 ────────────────────────────────────────────────
+function SrtCommonInfo({ host, port }: { host: string; port: number }) {
+  return (
+    <div style={{
+      background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10,
+      padding: "16px 20px", marginBottom: 16,
+    }}>
+      <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+        🌐 共通接続情報（全カメラ共通）
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 12 }}>
+        {[
+          { label: "サーバーホスト", value: host },
+          { label: "ポート番号",     value: String(port) },
+          { label: "SRT Mode",      value: "Caller" },
+          { label: "推奨 Latency",  value: "200 ms" },
+        ].map(({ label, value }) => (
+          <div key={label}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 14 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── メール送信フォーム ──────────────────────────────────────────
+function SendEmailForm({
+  reservationId,
+  srt,
+}: {
+  reservationId: string;
+  srt: SrtData;
+}) {
+  const [emails, setEmails]     = useState("");
+  const [sending, setSending]   = useState(false);
+  const [result, setResult]     = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleSend = async () => {
+    const targets = emails
+      .split(/[,\n]/)
+      .map((e) => e.trim())
+      .filter((e) => e.includes("@"));
+
+    if (targets.length === 0) {
+      setResult({ ok: false, message: "有効なメールアドレスを入力してください" });
+      return;
+    }
+
+    setSending(true);
+    setResult(null);
+
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}/send-srt-info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: targets }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "送信失敗");
+      setResult({ ok: true, message: `✅ ${targets.length} 件に送信しました` });
+      setEmails("");
+    } catch (e) {
+      setResult({ ok: false, message: `❌ ${e instanceof Error ? e.message : "送信エラー"}` });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{
+      background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10,
+      padding: "20px", marginTop: 24,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+        <span>📧</span> 接続情報をメールで送信
+      </div>
+      <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
+        ドライバーやカメラ担当者のメールアドレスを入力してください。カンマまたは改行で複数入力できます。
+      </div>
+
+      <textarea
+        value={emails}
+        onChange={(e) => setEmails(e.target.value)}
+        placeholder={"driver1@example.com\ndriver2@example.com, driver3@example.com"}
+        rows={3}
+        style={{
+          width: "100%", padding: "10px 12px",
+          background: "#0f0f18", border: "1px solid #2e2e40",
+          borderRadius: 6, color: "#e8e8f0", fontSize: 13,
+          fontFamily: "inherit", resize: "vertical", outline: "none",
+          boxSizing: "border-box",
+        }}
+      />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+        <button
+          onClick={handleSend}
+          disabled={sending}
+          style={{
+            padding: "9px 20px", borderRadius: 7,
+            background: sending ? "#333" : "#e63946",
+            border: "none", color: "#fff",
+            fontWeight: 700, fontSize: 14, cursor: sending ? "not-allowed" : "pointer",
+            transition: "background 0.2s", fontFamily: "inherit",
+          }}
+        >
+          {sending ? "送信中..." : "📤 送信する"}
+        </button>
+        {result && (
+          <span style={{ fontSize: 13, color: result.ok ? "#2dc653" : "#f87171" }}>
+            {result.message}
+          </span>
+        )}
+      </div>
+
+      <div style={{ marginTop: 12, fontSize: 11, color: "#555", lineHeight: 1.6 }}>
+        ※ メールには各カメラの Stream ID・ホスト・ポート情報が含まれます。<br />
+        ※ パスフレーズは機密情報です。送信先にご注意ください。
+      </div>
+    </div>
+  );
+}
+
+// ─── RDP 接続情報 ────────────────────────────────────────────────
+function RdpInstructions({ rdpHost, rdpPort, username }: { rdpHost: string; rdpPort: number; username: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ background: "#1a1a24", border: "1px solid #457b9d44", borderRadius: 10, padding: "16px 20px" }}>
+        <div style={{ fontWeight: 700, color: "#4895ef", marginBottom: 12 }}>RDP 接続情報</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {[
+            { label: "ホスト", value: `${rdpHost}:${rdpPort}`, copy: `${rdpHost}:${rdpPort}` },
+            { label: "ユーザー名", value: username, copy: username },
+          ].map(({ label, value, copy }) => (
+            <div key={label} style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#888" }}>{label}</span>
+              <div style={{ display: "flex", alignItems: "center", background: "#0f0f18", border: "1px solid #2e2e40", borderRadius: 5, padding: "5px 10px", fontFamily: "monospace", fontSize: 12, justifyContent: "space-between" }}>
+                <span>{value}</span>
+                <CopyButton text={copy} small />
+              </div>
+            </div>
+          ))}
+          <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#888" }}>パスワード</span>
+            <span style={{ fontSize: 12, color: "#666" }}>※ 予約確認メールに記載</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10, padding: "14px 18px" }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: "#888", marginBottom: 8 }}>接続手順</div>
+        <ol style={{ fontSize: 13, color: "#aaa", lineHeight: 2, paddingLeft: 18, margin: 0 }}>
+          <li>Windows「スタート」→「リモートデスクトップ接続」を開く</li>
+          <li>コンピューター欄に <code style={{ background: "#0f0f18", padding: "1px 5px", borderRadius: 3 }}>{rdpHost}:{rdpPort}</code> を入力</li>
           <li>「接続」をクリックし、ユーザー名とパスワードを入力</li>
-          <li>証明書の警告が出た場合は「はい」をクリック</li>
+          <li>証明書の警告が出たら「はい」をクリック</li>
         </ol>
       </div>
     </div>
   );
 }
 
-function PollingStatus({
-  jobStatus,
-  jobError,
-  jobAttempts,
-}: {
-  jobStatus: string | null;
-  jobError: string | null;
-  jobAttempts: number;
-}) {
+// ─── PollingStatus ───────────────────────────────────────────────
+function PollingStatus({ jobStatus, jobError, jobAttempts }: { jobStatus: string | null; jobError: string | null; jobAttempts: number }) {
   if (jobStatus === "succeeded") return null;
-
   const statusMap: Record<string, { icon: string; text: string; color: string }> = {
-    queued: { icon: "⏳", text: "VM の起動準備中...", color: "text-yellow-700" },
-    running: { icon: "🔄", text: "VM を起動しています...", color: "text-blue-700" },
-    error: { icon: "❌", text: "VM の起動に失敗しました", color: "text-red-700" },
+    queued:  { icon: "⏳", text: "VM の起動準備中...",   color: "#f59e0b" },
+    running: { icon: "🔄", text: "VM を起動しています...", color: "#4895ef" },
+    error:   { icon: "❌", text: "VM の起動に失敗しました", color: "#f87171" },
   };
-
   const info = jobStatus ? statusMap[jobStatus] : null;
-
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+    <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, padding: "14px 18px" }}>
       {info ? (
         <>
-          <p className={`font-medium ${info.color}`}>
-            {info.icon} {info.text}
-          </p>
-          {jobAttempts > 0 && (
-            <p className="text-xs text-gray-500 mt-1">試行回数: {jobAttempts}</p>
-          )}
-          {jobError && (
-            <p className="text-xs text-red-600 mt-1">エラー: {jobError}</p>
-          )}
-          {jobStatus !== "failed" && (
-            <p className="text-xs text-gray-500 mt-2">
-              自動的に更新されます（15 秒ごと）
-            </p>
-          )}
+          <p style={{ fontWeight: 600, color: info.color, margin: 0 }}>{info.icon} {info.text}</p>
+          {jobAttempts > 0 && <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0" }}>試行回数: {jobAttempts}</p>}
+          {jobError    && <p style={{ fontSize: 12, color: "#f87171", margin: "4px 0 0" }}>エラー: {jobError}</p>}
+          {jobStatus !== "failed" && <p style={{ fontSize: 12, color: "#666", margin: "6px 0 0" }}>自動的に更新されます（15 秒ごと）</p>}
         </>
       ) : (
-        <p className="text-gray-600 text-sm">⏳ VM の状態を確認中...</p>
+        <p style={{ color: "#aaa", fontSize: 13, margin: 0 }}>⏳ VM の状態を確認中...</p>
       )}
     </div>
   );
 }
 
-export default function ConnectionInfoPanel({
-  reservationId,
-  srt,
-  win,
-  provisionStatus,
-  planKey,
-}: Props) {
+// ─── メイン コンポーネント ───────────────────────────────────────
+export default function ConnectionInfoPanel({ reservationId, srt, win, provisionStatus, planKey }: Props) {
   const isObsPlan = planKey === "windows_obs";
 
   const [polledStatus, setPolledStatus] = useState<ProvisionStatusResponse | null>(null);
@@ -166,12 +395,10 @@ export default function ConnectionInfoPanel({
 
   const poll = useCallback(async () => {
     if (!isObsPlan) return;
-
     try {
       const res = await fetch(`/api/reservations/${reservationId}/provision-status`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: ProvisionStatusResponse = await res.json();
-      setPolledStatus(data);
+      setPolledStatus(await res.json());
       setPollingError(null);
     } catch (e) {
       setPollingError(e instanceof Error ? e.message : "取得エラー");
@@ -185,91 +412,82 @@ export default function ConnectionInfoPanel({
     return () => clearInterval(id);
   }, [poll, isObsPlan]);
 
-  // RDP 接続情報（ポーリング結果またはサーバーコンポーネントから渡された初期値）
-  const rdpHost = polledStatus?.rdp_host ?? win?.rdp_host ?? null;
-  const rdpPort = polledStatus?.rdp_port ?? win?.rdp_port ?? 3389;
-  const username = polledStatus?.username ?? win?.username ?? "obsadmin";
+  const rdpHost              = polledStatus?.rdp_host ?? win?.rdp_host ?? null;
+  const rdpPort              = polledStatus?.rdp_port ?? win?.rdp_port ?? 3389;
+  const username             = polledStatus?.username ?? win?.username ?? "obsadmin";
   const currentProvisionStatus = polledStatus?.provision_status ?? provisionStatus;
-  const jobStatus = polledStatus?.job_status ?? null;
-  const jobError = polledStatus?.job_error ?? null;
-  const jobAttempts = polledStatus?.job_attempts ?? 0;
+  const jobStatus            = polledStatus?.job_status ?? null;
+  const jobError             = polledStatus?.job_error ?? null;
+  const jobAttempts          = polledStatus?.job_attempts ?? 0;
+
+  // SRT items を正規化（新形式 items[] / 旧形式 stream_key フォールバック）
+  const host  = srt?.host ?? "srt.beql.jp";
+  const port  = srt?.port ?? 20000;
+  const items: SrtItem[] = srt?.items ?? (
+    srt?.stream_key ? [{ streamid: srt.stream_key, passphrase: "" }] : []
+  );
 
   return (
-    <div className="space-y-6">
-      {/* SRT 接続情報（OBS 以外のプランも表示） */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* ── SRT 接続情報 ── */}
       {srt && (
         <section>
-          <h2 className="text-xl font-bold text-gray-800 mb-4">SRT 接続情報</h2>
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-            <div className="flex items-center">
-              <span className="w-32 text-gray-600">ホスト</span>
-              <code className="font-mono">{srt.host}</code>
-              {srt.host && <CopyButton text={srt.host} />}
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 20 }}>📡</span> SRT 接続情報
+          </h2>
+
+          {/* 共通情報 */}
+          <SrtCommonInfo host={host} port={port} />
+
+          {/* カメラカード */}
+          {items.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px,1fr))", gap: 14 }}>
+              {items.map((item, idx) => (
+                <SrtCameraCard key={idx} index={idx} item={item} host={host} port={port} />
+              ))}
             </div>
-            <div className="flex items-center">
-              <span className="w-32 text-gray-600">ポート</span>
-              <code className="font-mono">{srt.port}</code>
+          ) : (
+            <div style={{ background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10, padding: 16, fontSize: 13, color: "#888" }}>
+              接続情報がまだ生成されていません
             </div>
-            {srt.stream_key && (
-              <div className="flex items-center">
-                <span className="w-32 text-gray-600">ストリームキー</span>
-                <code className="font-mono text-xs bg-white px-2 py-1 rounded border">
-                  {srt.stream_key}
-                </code>
-                <CopyButton text={srt.stream_key} />
-              </div>
-            )}
-          </div>
+          )}
+
+          {/* メール送信フォーム */}
+          {items.length > 0 && (
+            <SendEmailForm reservationId={reservationId} srt={srt} />
+          )}
         </section>
       )}
 
-      {/* Windows OBS VM 接続情報 */}
+      {/* ── Windows OBS VM 接続情報 ── */}
       {isObsPlan && (
         <section>
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Windows OBS VM 接続情報</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 20 }}>🖥</span> Windows OBS VM 接続情報
+          </h2>
 
           {pollingError && (
-            <p className="text-red-500 text-sm mb-3">⚠️ 状態取得エラー: {pollingError}</p>
+            <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12 }}>⚠️ 状態取得エラー: {pollingError}</div>
           )}
 
-          {/* VM が準備できていない場合 */}
-          {(!rdpHost ||
-            currentProvisionStatus === "provisioning" ||
-            currentProvisionStatus === null) &&
-            jobStatus !== null && (
-              <PollingStatus
-                jobStatus={jobStatus}
-                jobError={jobError}
-                jobAttempts={jobAttempts}
-              />
-            )}
+          {(!rdpHost || currentProvisionStatus === "provisioning" || currentProvisionStatus === null) && jobStatus !== null && (
+            <PollingStatus jobStatus={jobStatus} jobError={jobError} jobAttempts={jobAttempts} />
+          )}
 
-          {/* VM 準備完了 → RDP 接続情報を表示 */}
           {rdpHost && currentProvisionStatus === "provisioned" && (
-            <RdpInstructions
-              rdpHost={rdpHost}
-              rdpPort={rdpPort}
-              username={username}
-            />
+            <RdpInstructions rdpHost={rdpHost} rdpPort={rdpPort} username={username} />
           )}
 
-          {/* 予約済みだが VM がまだ割り当てられていない */}
-          {!rdpHost &&
-            currentProvisionStatus !== "provisioned" &&
-            jobStatus === null && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <p className="text-gray-600 text-sm">
-                  ⏳ VM はまだ割り当てられていません。予約開始時刻に自動的に起動されます。
-                </p>
-              </div>
-            )}
+          {!rdpHost && currentProvisionStatus !== "provisioned" && jobStatus === null && (
+            <div style={{ background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10, padding: 16, fontSize: 13, color: "#888" }}>
+              ⏳ VM はまだ割り当てられていません。予約開始時刻に自動的に起動されます。
+            </div>
+          )}
 
-          {/* デプロビジョン済み */}
           {currentProvisionStatus === "deprovisioned" && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <p className="text-gray-600 text-sm">
-                ✅ 予約終了につき VM は削除されました。
-              </p>
+            <div style={{ background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10, padding: 16, fontSize: 13, color: "#888" }}>
+              ✅ 予約終了につき VM は削除されました。
             </div>
           )}
         </section>
