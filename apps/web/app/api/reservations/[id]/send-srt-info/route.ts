@@ -3,38 +3,28 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/app/lib/supabase/admin-client";
 
-// メール送信ユーティリティを再利用
 async function sendSrtInfoEmail(to: string, payload: {
   reservationId: string;
   startAt:       string;
   endAt:         string;
   host:          string;
   port:          number;
-  items:         Array<{ streamid: string; passphrase: string }>;
+  cameraIndex:   number;
+  item:          { streamid: string; passphrase: string };
 }) {
   const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
   const FROM_EMAIL     = process.env.FROM_EMAIL ?? "noreply@beql.jp";
 
   if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
 
-  const camRows = payload.items.map((item, idx) => `
-    <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #2e2e40;color:#aaa;">Camera ${idx + 1}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #2e2e40;">
-        <div style="font-family:monospace;font-size:13px;color:#a8d8ea;word-break:break-all;">
-          publish:${item.streamid}:rsp:${item.passphrase}
-        </div>
-      </td>
-    </tr>
-  `).join("");
-
   const startJst = new Date(payload.startAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-  const endJst   = new Date(payload.endAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+  const endJst   = new Date(payload.endAt).toLocaleString("ja-JP",   { timeZone: "Asia/Tokyo" });
+  const streamId = `publish:${payload.item.streamid}:rsp:${payload.item.passphrase}`;
 
   const html = `
 <!DOCTYPE html>
 <html lang="ja">
-<head><meta charset="UTF-8"><title>SRT接続情報</title></head>
+<head><meta charset="UTF-8"><title>SRT接続情報 Camera ${payload.cameraIndex}</title></head>
 <body style="background:#0f0f13;color:#e8e8f0;font-family:'Noto Sans JP',sans-serif;margin:0;padding:0;">
   <div style="max-width:600px;margin:0 auto;padding:32px 24px;">
 
@@ -42,65 +32,47 @@ async function sendSrtInfoEmail(to: string, payload: {
       <div style="display:inline-block;background:#e63946;border-radius:8px;padding:8px 16px;font-size:18px;font-weight:700;color:#fff;">
         🏎 RaceStreamPro
       </div>
-      <h1 style="font-size:22px;font-weight:700;margin:16px 0 4px;">SRT 接続情報</h1>
+      <h1 style="font-size:22px;font-weight:700;margin:16px 0 4px;">SRT 接続情報 — Camera ${payload.cameraIndex}</h1>
       <p style="color:#888;font-size:14px;margin:0;">この情報を使用してカメラを接続してください</p>
     </div>
 
-    <!-- 予約情報 -->
     <div style="background:#1a1a24;border:1px solid #2e2e40;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
       <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">予約情報</div>
-      <div style="display:grid;gap:6px;font-size:13px;">
+      <div style="font-size:13px;line-height:2;">
         <div><span style="color:#888;margin-right:8px;">予約ID</span><span style="font-family:monospace;color:#60a5fa;">${payload.reservationId.slice(0, 8)}</span></div>
         <div><span style="color:#888;margin-right:8px;">開始</span>${startJst}</div>
         <div><span style="color:#888;margin-right:8px;">終了</span>${endJst}</div>
       </div>
     </div>
 
-    <!-- 共通情報 -->
     <div style="background:#1a1a24;border:1px solid #2e2e40;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
       <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">共通接続情報</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr>
-          <td style="padding:6px 0;color:#888;width:120px;">サーバーホスト</td>
-          <td style="font-family:monospace;font-weight:700;">${payload.host}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#888;">ポート</td>
-          <td style="font-family:monospace;font-weight:700;">${payload.port}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#888;">SRT Mode</td>
-          <td style="font-family:monospace;font-weight:700;">Caller</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#888;">推奨 Latency</td>
-          <td style="font-family:monospace;font-weight:700;">200 ms</td>
-        </tr>
+        <tr><td style="padding:6px 0;color:#888;width:140px;">サーバーホスト</td><td style="font-family:monospace;font-weight:700;">${payload.host}</td></tr>
+        <tr><td style="padding:6px 0;color:#888;">ポート</td><td style="font-family:monospace;font-weight:700;">${payload.port}</td></tr>
+        <tr><td style="padding:6px 0;color:#888;">SRT Mode</td><td style="font-family:monospace;font-weight:700;">Caller</td></tr>
+        <tr><td style="padding:6px 0;color:#888;">推奨 Latency</td><td style="font-family:monospace;font-weight:700;">200 ms</td></tr>
       </table>
     </div>
 
-    <!-- カメラ別 Stream ID -->
-    <div style="background:#1a1a24;border:1px solid #2e2e40;border-radius:10px;overflow:hidden;margin-bottom:20px;">
-      <div style="padding:14px 20px;border-bottom:1px solid #2e2e40;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;">
-        カメラ別 Stream ID（Larix / LM-Cam に入力）
+    <div style="background:#1a1a24;border:1px solid #2e2e40;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">
+        Camera ${payload.cameraIndex} — Stream ID
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="background:#0f0f18;">
-            <th style="padding:10px 14px;text-align:left;color:#888;font-weight:600;">カメラ</th>
-            <th style="padding:10px 14px;text-align:left;color:#888;font-weight:600;">Stream ID</th>
-          </tr>
-        </thead>
-        <tbody>${camRows}</tbody>
-      </table>
+      <div style="background:#0f0f18;border-radius:8px;padding:14px 16px;">
+        <div style="font-size:11px;color:#888;margin-bottom:6px;">Larix Broadcaster / LM-Cam に入力する Stream ID</div>
+        <div style="font-family:monospace;font-size:13px;color:#a8d8ea;word-break:break-all;line-height:1.7;">
+          ${streamId}
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:#666;">
+        ※ パスフレーズは Stream ID に含まれています。別途入力は不要です。
+      </div>
     </div>
 
-    <!-- 設定手順リンク -->
-    <div style="background:rgba(69,123,157,0.1);border:1px solid rgba(69,123,157,0.25);border-radius:10px;padding:14px 18px;margin-bottom:24px;">
-      <div style="font-size:13px;line-height:1.8;">
-        📱 <strong>Larix Broadcaster</strong>（推奨）または <strong>LM-Cam</strong> を使用してください。<br>
-        設定手順: <a href="https://rsp.beql.jp" style="color:#4895ef;">rsp.beql.jp</a> の設定書ページをご参照ください。
-      </div>
+    <div style="background:rgba(69,123,157,0.1);border:1px solid rgba(69,123,157,0.25);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13px;line-height:1.8;">
+      📱 <strong>Larix Broadcaster</strong>（推奨）または <strong>LM-Cam</strong> を使用してください。<br>
+      設定手順: <a href="https://rsp.beql.jp" style="color:#4895ef;">rsp.beql.jp</a> の設定書ページをご参照ください。
     </div>
 
     <div style="text-align:center;font-size:12px;color:#555;border-top:1px solid #2e2e40;padding-top:16px;">
@@ -109,6 +81,8 @@ async function sendSrtInfoEmail(to: string, payload: {
   </div>
 </body>
 </html>`;
+
+  console.log(`[send-srt-info] Sending to ${to} cam=${payload.cameraIndex} host=${payload.host} port=${payload.port}`);
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -119,15 +93,19 @@ async function sendSrtInfoEmail(to: string, payload: {
     body: JSON.stringify({
       from:    FROM_EMAIL,
       to:      [to],
-      subject: `【RaceStreamPro】SRT接続情報 - ${startJst}`,
+      subject: `【RaceStreamPro】SRT接続情報 Camera ${payload.cameraIndex} - ${startJst}`,
       html,
     }),
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Resend error: ${err}`);
+    console.error(`[send-srt-info] Resend API error: ${res.status} ${err}`);
+    throw new Error(`Resend error ${res.status}: ${err}`);
   }
+
+  const result = await res.json();
+  console.log(`[send-srt-info] Resend success: ${JSON.stringify(result)}`);
 }
 
 export async function POST(
@@ -152,25 +130,27 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // 予約を取得（本人確認）
+  // 予約を取得
   const admin = createAdminClient();
-  const { data: reservation } = await admin
+  const { data: reservation, error: resErr } = await admin
     .from("reservations")
     .select("id, user_id, start_at, end_at")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
 
+  if (resErr) console.error(`[send-srt-info] reservation fetch error: ${resErr.message}`);
   if (!reservation) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // SRT リソースを取得
-  const { data: resource } = await admin
+  const { data: resource, error: srtErr } = await admin
     .from("reservation_resources")
     .select("data")
     .eq("reservation_id", id)
     .eq("kind", "srt")
     .single();
 
+  if (srtErr) console.error(`[send-srt-info] srt resource fetch error: ${srtErr.message}`);
   if (!resource?.data) return NextResponse.json({ error: "SRT info not found" }, { status: 404 });
 
   const srtData = resource.data as {
@@ -180,34 +160,62 @@ export async function POST(
   };
 
   // リクエストボディ
-  const body = await req.json();
-  const emails: string[] = (body.emails ?? []).filter((e: string) => e.includes("@"));
+  // cameras: [{ cameraIndex: 1, emails: ["a@example.com", "b@example.com"] }, ...]
+  let body: any;
+  try {
+    body = await req.json();
+  } catch (e) {
+    console.error(`[send-srt-info] JSON parse error: ${e}`);
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  if (emails.length === 0) {
+  const cameras: Array<{ cameraIndex: number; emails: string[] }> = body.cameras ?? [];
+
+  if (!cameras.length) {
+    return NextResponse.json({ error: "No camera targets specified" }, { status: 400 });
+  }
+
+  const tasks: Array<Promise<void>> = [];
+
+  for (const cam of cameras) {
+    const itemIndex = cam.cameraIndex - 1;
+    const item = srtData.items?.[itemIndex];
+    if (!item) {
+      console.warn(`[send-srt-info] camera index ${cam.cameraIndex} not found in items`);
+      continue;
+    }
+
+    const validEmails = (cam.emails ?? []).filter((e: string) => e.includes("@")).slice(0, 20);
+    for (const email of validEmails) {
+      tasks.push(
+        sendSrtInfoEmail(email, {
+          reservationId: reservation.id,
+          startAt:       reservation.start_at,
+          endAt:         reservation.end_at,
+          host:          srtData.host,
+          port:          srtData.port,
+          cameraIndex:   cam.cameraIndex,
+          item,
+        })
+      );
+    }
+  }
+
+  if (!tasks.length) {
     return NextResponse.json({ error: "No valid emails" }, { status: 400 });
   }
-  if (emails.length > 20) {
-    return NextResponse.json({ error: "Too many emails (max 20)" }, { status: 400 });
-  }
 
-  // 全員に送信
-  const results = await Promise.allSettled(
-    emails.map((email) =>
-      sendSrtInfoEmail(email, {
-        reservationId: reservation.id,
-        startAt:       reservation.start_at,
-        endAt:         reservation.end_at,
-        host:          srtData.host,
-        port:          srtData.port,
-        items:         srtData.items ?? [],
-      })
-    )
-  );
-
+  const results = await Promise.allSettled(tasks);
   const succeeded = results.filter((r) => r.status === "fulfilled").length;
   const failed    = results.filter((r) => r.status === "rejected").length;
 
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`[send-srt-info] task[${i}] failed: ${r.reason}`);
+    }
+  });
+
   console.log(`[send-srt-info] sent=${succeeded} failed=${failed} reservation=${id}`);
 
-  return NextResponse.json({ sent: succeeded, failed, total: emails.length });
+  return NextResponse.json({ sent: succeeded, failed, total: tasks.length });
 }

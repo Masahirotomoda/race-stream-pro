@@ -46,6 +46,7 @@ interface Props {
 
 // ─── カメラカラー ───────────────────────────────────────────────
 const CAM_COLORS = ["#e63946", "#2dc653", "#4895ef", "#f4a261", "#a78bfa", "#fb7185"];
+const CAM_LABELS = ["CAM 1", "CAM 2", "CAM 3", "CAM 4"];
 
 // ─── CopyButton ─────────────────────────────────────────────────
 function CopyButton({ text, label, small }: { text: string; label?: string; small?: boolean }) {
@@ -225,7 +226,8 @@ function SrtCommonInfo({ host, port }: { host: string; port: number }) {
   );
 }
 
-// ─── メール送信フォーム ──────────────────────────────────────────
+// ─── カメラ別メール送信フォーム ─────────────────────────────────
+
 function SendEmailForm({
   reservationId,
   srt,
@@ -233,18 +235,27 @@ function SendEmailForm({
   reservationId: string;
   srt: SrtData;
 }) {
-  const [emails, setEmails]     = useState("");
+  const items = srt.items ?? [];
+  // カメラごとのメールアドレス入力 state: { [cameraIndex]: "email1\nemail2" }
+  const [emailMap, setEmailMap] = useState<Record<number, string>>({});
   const [sending, setSending]   = useState(false);
   const [result, setResult]     = useState<{ ok: boolean; message: string } | null>(null);
 
-  const handleSend = async () => {
-    const targets = emails
-      .split(/[,\n]/)
-      .map((e) => e.trim())
-      .filter((e) => e.includes("@"));
+  const setEmail = (idx: number, val: string) =>
+    setEmailMap((prev) => ({ ...prev, [idx]: val }));
 
-    if (targets.length === 0) {
-      setResult({ ok: false, message: "有効なメールアドレスを入力してください" });
+  const handleSend = async () => {
+    // カメラ別に { cameraIndex, emails[] } を組み立て
+    const cameras = items.map((_, i) => ({
+      cameraIndex: i + 1,
+      emails: (emailMap[i] ?? "")
+        .split(/[,\n]/)
+        .map((e) => e.trim())
+        .filter((e) => e.includes("@")),
+    })).filter((c) => c.emails.length > 0);
+
+    if (cameras.length === 0) {
+      setResult({ ok: false, message: "少なくとも1件のメールアドレスを入力してください" });
       return;
     }
 
@@ -255,12 +266,15 @@ function SendEmailForm({
       const res = await fetch(`/api/reservations/${reservationId}/send-srt-info`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emails: targets }),
+        body: JSON.stringify({ cameras }),
       });
-      const json = await res.json();
+      const text = await res.text();
+      let json: any = {};
+      try { json = JSON.parse(text); } catch { throw new Error(`サーバーエラー: ${text.slice(0, 100)}`); }
       if (!res.ok) throw new Error(json.error ?? "送信失敗");
-      setResult({ ok: true, message: `✅ ${targets.length} 件に送信しました` });
-      setEmails("");
+      const totalEmails = cameras.reduce((s, c) => s + c.emails.length, 0);
+      setResult({ ok: true, message: `✅ ${totalEmails} 件に送信しました（成功 ${json.sent} / 失敗 ${json.failed}）` });
+      setEmailMap({});
     } catch (e) {
       setResult({ ok: false, message: `❌ ${e instanceof Error ? e.message : "送信エラー"}` });
     } finally {
@@ -268,45 +282,92 @@ function SendEmailForm({
     }
   };
 
+  if (items.length === 0) return null;
+
   return (
     <div style={{
       background: "#1a1a24", border: "1px solid #2e2e40", borderRadius: 10,
       padding: "20px", marginTop: 24,
     }}>
+      {/* ヘッダー */}
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-        <span>📧</span> 接続情報をメールで送信
+        <span>📧</span> 接続情報をカメラ別にメール送信
       </div>
-      <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
-        ドライバーやカメラ担当者のメールアドレスを入力してください。カンマまたは改行で複数入力できます。
+      <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+        各カメラ担当者のメールアドレスを入力してください。空欄のカメラはスキップされます。
       </div>
 
-      <textarea
-        value={emails}
-        onChange={(e) => setEmails(e.target.value)}
-        placeholder={"driver1@example.com\ndriver2@example.com, driver3@example.com"}
-        rows={3}
-        style={{
-          width: "100%", padding: "10px 12px",
-          background: "#0f0f18", border: "1px solid #2e2e40",
-          borderRadius: 6, color: "#e8e8f0", fontSize: 13,
-          fontFamily: "inherit", resize: "vertical", outline: "none",
-          boxSizing: "border-box",
-        }}
-      />
+      {/* カメラ別入力行 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {items.map((item, i) => {
+          const color = CAM_COLORS[i % CAM_COLORS.length];
+          const label = CAM_LABELS[i] ?? `CAM ${i + 1}`;
+          // path から短いカメラ名を取得
+          const pathLabel = item.path ?? item.streamid?.split("/").pop() ?? "";
+          return (
+            <div key={i} style={{
+              display: "grid",
+              gridTemplateColumns: "120px 1fr",
+              alignItems: "center",
+              gap: 10,
+            }}>
+              {/* カメララベル */}
+              <div style={{
+                display: "flex", flexDirection: "column", gap: 3,
+              }}>
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  background: `${color}22`, border: `1px solid ${color}55`,
+                  borderRadius: 6, padding: "5px 10px",
+                  fontWeight: 700, fontSize: 13, color,
+                }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: color, display: "inline-block", flexShrink: 0,
+                  }} />
+                  {label}
+                </div>
+                {pathLabel && (
+                  <div style={{ fontSize: 10, color: "#666", paddingLeft: 2, fontFamily: "monospace" }}>
+                    {pathLabel}
+                  </div>
+                )}
+              </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+              {/* メールアドレス入力 */}
+              <input
+                type="text"
+                value={emailMap[i] ?? ""}
+                onChange={(e) => setEmail(i, e.target.value)}
+                placeholder={`cam${i + 1}担当者@example.com`}
+                style={{
+                  width: "100%", padding: "9px 12px",
+                  background: "#0f0f18", border: `1px solid ${emailMap[i] ? color + "66" : "#2e2e40"}`,
+                  borderRadius: 6, color: "#e8e8f0", fontSize: 13,
+                  fontFamily: "inherit", outline: "none",
+                  transition: "border-color 0.2s",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 送信ボタン */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
         <button
           onClick={handleSend}
           disabled={sending}
           style={{
-            padding: "9px 20px", borderRadius: 7,
+            padding: "9px 22px", borderRadius: 7,
             background: sending ? "#333" : "#e63946",
             border: "none", color: "#fff",
             fontWeight: 700, fontSize: 14, cursor: sending ? "not-allowed" : "pointer",
             transition: "background 0.2s", fontFamily: "inherit",
           }}
         >
-          {sending ? "送信中..." : "📤 送信する"}
+          {sending ? "送信中…" : "📤 各カメラに送信する"}
         </button>
         {result && (
           <span style={{ fontSize: 13, color: result.ok ? "#2dc653" : "#f87171" }}>
@@ -316,7 +377,7 @@ function SendEmailForm({
       </div>
 
       <div style={{ marginTop: 12, fontSize: 11, color: "#555", lineHeight: 1.6 }}>
-        ※ メールには各カメラの Stream ID・ホスト・ポート情報が含まれます。<br />
+        ※ 各カメラの Stream ID・ホスト・ポート情報が送付されます。<br />
         ※ パスフレーズは機密情報です。送信先にご注意ください。
       </div>
     </div>
