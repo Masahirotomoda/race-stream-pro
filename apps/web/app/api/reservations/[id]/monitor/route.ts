@@ -156,7 +156,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { data: reservation } = await supabase
     .from("reservations")
-    .select("id,user_id,youtube_broadcast_url,twitch_channel_url")
+    .select("id,user_id,youtube_broadcast_url,twitch_channel_url,end_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -176,7 +176,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const ytKey = process.env.YOUTUBE_API_KEY;
 
   if (youtubeVideoId) {
-    youtube = { videoId: youtubeVideoId, live: null, viewerCount: null, startedAt: null, note: null };
+    youtube = { videoId: youtubeVideoId, url: reservation.youtube_broadcast_url ?? null, live: null, viewerCount: null, startedAt: null, note: null };
 
     if (!ytKey) {
       youtube.note = "YOUTUBE_API_KEY is not set (viewerCount/live status disabled)";
@@ -208,6 +208,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (twitchChannel) {
     twitch = {
       channel: twitchChannel,
+      url: reservation.twitch_channel_url ?? null,
       live: null,
       viewerCount: null,
       startedAt: null,
@@ -224,6 +225,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     },
     youtube,
     twitch,
+    end_at: (reservation as any).end_at ?? null,
     generatedAt: new Date().toISOString(),
   });
 }
