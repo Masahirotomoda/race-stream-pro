@@ -83,14 +83,26 @@ export async function POST(req: Request) {
   try {
     const admin = createAdminClient();
 
-    const { data: rr, error: rrErr } = await admin
+    // items[] の中に streamid + passphrase が含まれる行を検索
+    // contains() は余分なフィールドがあると一致しないため RPC で検索
+    const { data: rrList, error: rrErr } = await admin
       .from("reservation_resources")
-      .select("reservation_id")
-      .eq("kind", "srt")
-      .contains("data", { items: [{ streamid: streamPath, passphrase: token }] })
-      .maybeSingle();
+      .select("reservation_id, data")
+      .eq("kind", "srt");
 
-    if (rrErr || !rr) {
+    if (rrErr) {
+      console.error("[mediamtx-auth] db error", rrErr);
+      return NextResponse.json({ ok: false, message: "server error" }, { status: 500 });
+    }
+
+    const rr = (rrList ?? []).find((row: any) => {
+      const items: any[] = row.data?.items ?? [];
+      return items.some(
+        (item: any) => item.streamid === streamPath && item.passphrase === token
+      );
+    });
+
+    if (!rr) {
       console.warn("[mediamtx-auth] unauthorized", { streamPath, token: mask(token) });
       return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
     }
