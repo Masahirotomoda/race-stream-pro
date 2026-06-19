@@ -160,23 +160,18 @@ export default function NewReservationPage() {
       });
   }, []);
 
-  // beta_approved チェック
+  // beta_approved チェック（/api/me 経由でサーバー側判定）
   useEffect(() => {
-    const sb = supabase();
-    sb.auth.getUser().then(({ data: { user } }) => {
-      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "").split(",").map(e => e.trim());
-      if (user?.email && adminEmails.includes(user.email)) {
-        setIsAdminUser(true);
-        setIsBetaApproved(true);
-        return;
-      }
-      sb.from("profiles")
-        .select("beta_approved")
-        .single()
-        .then(({ data }) => {
-          setIsBetaApproved(data?.beta_approved === true);
-        });
-    });
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((data) => {
+        setIsAdminUser(data.is_admin === true);
+        setIsBetaApproved(data.beta_approved === true);
+      })
+      .catch(() => {
+        setIsBetaApproved(false);
+        setIsAdminUser(false);
+      });
   }, []);
 
   // fetch availability (only for srt_obs)
