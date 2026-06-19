@@ -51,6 +51,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: false, message: "bad json" }, { status: 400 });
   }
+  console.log("[mediamtx-auth] request body:", JSON.stringify(body));
 
   const protocol = body.protocol ?? "";
   const action = body.action ?? "";
