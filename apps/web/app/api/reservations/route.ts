@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { sendCreatedEmail } from "@/app/lib/email";
 import { createAdminClient } from "@/app/lib/supabase/admin-client";
+import { isAdmin } from "@/app/lib/admin";
 import crypto from "node:crypto";
 
 export const runtime = "nodejs";
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     .select("beta_approved")
     .eq("id", user.id)
     .single();
-  const isBetaApproved = profile?.beta_approved === true;
+  const isBetaApproved = profile?.beta_approved === true || isAdmin(user.email);
 
   const planKey = body.plan_key;
   const startIso = body.start_at; // UI側でISOにして送る想定

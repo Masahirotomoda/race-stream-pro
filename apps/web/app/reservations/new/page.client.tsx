@@ -124,6 +124,7 @@ export default function NewReservationPage() {
   const [notes, setNotes] = useState("");
 
   const [isBetaApproved, setIsBetaApproved] = useState<boolean | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
@@ -161,13 +162,21 @@ export default function NewReservationPage() {
 
   // beta_approved チェック
   useEffect(() => {
-    supabase()
-      .from("profiles")
-      .select("beta_approved")
-      .single()
-      .then(({ data }) => {
-        setIsBetaApproved(data?.beta_approved === true);
-      });
+    const sb = supabase();
+    sb.auth.getUser().then(({ data: { user } }) => {
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "").split(",").map(e => e.trim());
+      if (user?.email && adminEmails.includes(user.email)) {
+        setIsAdminUser(true);
+        setIsBetaApproved(true);
+        return;
+      }
+      sb.from("profiles")
+        .select("beta_approved")
+        .single()
+        .then(({ data }) => {
+          setIsBetaApproved(data?.beta_approved === true);
+        });
+    });
   }, []);
 
   // fetch availability (only for srt_obs)
@@ -332,7 +341,7 @@ export default function NewReservationPage() {
         <div style={{ background: "#111", border: "1px solid #222", borderRadius: 12, overflow: "visible" }}>
           <div style={{ height: 3, background: "linear-gradient(90deg, #e63946, #ff6b6b, transparent)" }} />
           <div style={{ padding: "24px 28px 28px" }}>
-            {isBetaApproved === false && (
+            {isBetaApproved === false && !isAdminUser && (
               <div style={{
                 background: "rgba(234,179,8,0.08)",
                 border: "1px solid rgba(234,179,8,0.35)",
@@ -748,7 +757,7 @@ export default function NewReservationPage() {
                   transition: "all 0.2s",
                 }}
               >
-                {loading ? "送信中…" : isBetaApproved === false ? "予約を作成（デモモード）" : "予約を作成"}
+                {loading ? "送信中…" : (isBetaApproved === false && !isAdminUser) ? "予約を作成（デモモード）" : "予約を作成"}
               </button>
 
               <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))" }}>
